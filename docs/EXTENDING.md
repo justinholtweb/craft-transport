@@ -120,3 +120,34 @@ if (class_exists(\some\plugin\fields\TheField::class)) {
 ```
 
 This is how Transport registers its own Commerce, Hyper, Neo, and Super Table handlers.
+
+## Lifecycle events
+
+Hook into export and import runs to inspect, adjust, or cancel them, or to react after
+they finish.
+
+| Event | Class | Cancel? |
+|---|---|---|
+| `Export::EVENT_BEFORE_EXPORT` | `BeforeExportEvent` (`config`) | yes (`$event->isValid = false`) |
+| `Export::EVENT_AFTER_EXPORT` | `AfterExportEvent` (`config`, `path`, `elements`) | — |
+| `Import::EVENT_BEFORE_IMPORT` | `BeforeImportEvent` (`package`, `dryRun`) | yes (`$event->isValid = false`) |
+| `Import::EVENT_AFTER_IMPORT` | `AfterImportEvent` (`package`, `result`, `dryRun`) | — |
+
+```php
+use justinholtweb\transport\services\Import;
+use justinholtweb\transport\events\AfterImportEvent;
+use yii\base\Event;
+
+Event::on(
+    Import::class,
+    Import::EVENT_AFTER_IMPORT,
+    function (AfterImportEvent $event) {
+        if ($event->result['status'] === 'completed') {
+            // e.g. warm caches, ping a webhook, reindex search…
+        }
+    }
+);
+```
+
+Cancelling a before-event stops the run: a cancelled export returns an empty path; a
+cancelled import returns a result with `status` of `cancelled`.

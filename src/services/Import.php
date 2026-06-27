@@ -4,6 +4,8 @@ namespace justinholtweb\transport\services;
 
 use Craft;
 use craft\elements\Asset;
+use justinholtweb\transport\events\AfterImportEvent;
+use justinholtweb\transport\events\BeforeImportEvent;
 use justinholtweb\transport\helpers\IdentityHelper;
 use justinholtweb\transport\models\TransportPackage;
 use justinholtweb\transport\Plugin;
@@ -20,6 +22,12 @@ use yii\base\Component;
  */
 class Import extends Component
 {
+    /** Raised after a package is opened/validated but before importing; may cancel. */
+    public const EVENT_BEFORE_IMPORT = 'beforeImport';
+
+    /** Raised after an import finishes. */
+    public const EVENT_AFTER_IMPORT = 'afterImport';
+
     /**
      * Imports a package from disk.
      *
@@ -44,6 +52,12 @@ class Import extends Component
                 'skipped' => 0,
                 'errors' => $validationErrors,
             ];
+        }
+
+        $beforeEvent = new BeforeImportEvent(['package' => $package, 'dryRun' => $dryRun]);
+        $this->trigger(self::EVENT_BEFORE_IMPORT, $beforeEvent);
+        if (!$beforeEvent->isValid) {
+            return ['status' => 'cancelled', 'created' => 0, 'updated' => 0, 'skipped' => 0, 'errors' => []];
         }
 
         $selectedUids = $options['selectedUids'] ?? null;
@@ -117,6 +131,12 @@ class Import extends Component
             $history->snapshotId = $snapshot?->id;
             $history->save(false);
         }
+
+        $this->trigger(self::EVENT_AFTER_IMPORT, new AfterImportEvent([
+            'package' => $package,
+            'result' => $result,
+            'dryRun' => $dryRun,
+        ]));
 
         return $result;
     }

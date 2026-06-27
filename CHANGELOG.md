@@ -71,13 +71,25 @@
 #### Phase 7 — testing & documentation
 
 - README with feature overview, install, export/import workflows, CLI, and rollback.
-- PHPUnit unit tests for the dependency graph (topological sort + cycle detection) and
-  the selective-merge logic.
+- Export/import lifecycle events: `Export::EVENT_BEFORE_EXPORT` / `EVENT_AFTER_EXPORT`
+  and `Import::EVENT_BEFORE_IMPORT` / `EVENT_AFTER_IMPORT` (before-events can cancel).
+- Test suites: unit tests (dependency graph/resolver, selective merge, package + diff
+  models) and integration tests that round-trip the full export/import pipeline against
+  a live Craft app (UID identity, recreation, dependency ordering, merge, rollback).
 
 #### More integrations
 
 - Freelink field handler (justinholtweb): rewrites relations-backed element links to
   portable UID references and restores them on import.
+- Asset file transfer verified end to end against a live volume (bundle + recreate).
+- Craft Commerce 5 product/variant migration verified (product type, SKU, base price,
+  dimensions, tax/shipping category, custom fields).
+- Google Maps Address field handler: strips environment-specific owner keys.
+- SEOMatic SeoSettings field handler: rewrites SEO/OG/Twitter image asset ids to UIDs.
+- Verbb Navigation node migration: element links, custom URLs, and nested structure.
+- Formie support: form definitions (via Formie's export/import) and submissions with
+  their field values.
+- Solspace Calendar events: dates, recurrence rules, and author (canonical events).
+- SEOMatic SeoSettings image asset references made portable.
 - Documented integration status for all supported and planned plugins
-  (`docs/INTEGRATIONS.md`). Freenav and Google Maps fields need no handler (their values
-  are already portable).
+  (`docs/INTEGRATIONS.md`).

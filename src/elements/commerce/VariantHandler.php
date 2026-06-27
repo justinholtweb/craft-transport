@@ -3,19 +3,17 @@
 namespace justinholtweb\transport\elements\commerce;
 
 use craft\base\ElementInterface;
+use craft\commerce\elements\Product;
 use craft\commerce\elements\Variant;
 use justinholtweb\transport\elements\BaseElementHandler;
 use justinholtweb\transport\helpers\IdentityHelper;
-use justinholtweb\transport\Plugin;
 
 /**
- * Element handler for standalone Craft Commerce variants.
+ * Element handler for standalone Craft Commerce 5 variants.
  *
  * Variants are normally exported inline with their product (see {@see ProductHandler}).
- * This handler exists for cases where variants are exported directly and to make
- * variant references resolvable.
- *
- * Only registered when craftcms/commerce is installed. Experimental.
+ * This handler covers direct variant export and makes variant references resolvable.
+ * Only registered when Commerce is installed.
  */
 class VariantHandler extends BaseElementHandler
 {
@@ -37,15 +35,11 @@ class VariantHandler extends BaseElementHandler
     public function serializeAttributes(ElementInterface $element): array
     {
         /** @var Variant $element */
-        $product = $element->getProduct();
-
         return [
-            'product' => $product?->uid,
-            'sku' => $element->sku,
+            'product' => $element->getProduct()?->uid,
+            'sku' => $element->getSku(),
             'isDefault' => $element->isDefault,
-            'price' => $element->price ?? null,
-            'stock' => $element->stock,
-            'hasUnlimitedStock' => $element->hasUnlimitedStock,
+            'basePrice' => $element->getBasePrice(),
             'width' => $element->width,
             'height' => $element->height,
             'length' => $element->length,
@@ -56,10 +50,7 @@ class VariantHandler extends BaseElementHandler
     public function makeElement(array $attributes): ?ElementInterface
     {
         $productUid = $attributes['product'] ?? null;
-        $productId = $productUid
-            ? IdentityHelper::resolveId($productUid, \craft\commerce\elements\Product::class)
-            : null;
-
+        $productId = $productUid ? IdentityHelper::resolveId($productUid, Product::class) : null;
         if ($productId === null) {
             return null;
         }
@@ -76,9 +67,13 @@ class VariantHandler extends BaseElementHandler
         if (isset($attributes['sku'])) {
             $element->setSku($attributes['sku']);
         }
-        foreach (['isDefault', 'price', 'stock', 'hasUnlimitedStock', 'width', 'height', 'length', 'weight'] as $attr) {
-            if (array_key_exists($attr, $attributes)) {
-                $element->$attr = $attributes[$attr];
+        if (array_key_exists('basePrice', $attributes) && $attributes['basePrice'] !== null) {
+            $element->setBasePrice((float)$attributes['basePrice']);
+        }
+        $element->isDefault = (bool)($attributes['isDefault'] ?? $element->isDefault);
+        foreach (['width', 'height', 'length', 'weight'] as $dim) {
+            if (array_key_exists($dim, $attributes)) {
+                $element->$dim = $attributes[$dim];
             }
         }
     }

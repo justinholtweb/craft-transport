@@ -12,13 +12,15 @@ made portable. Handlers are registered only when the host plugin is installed.
 | **Verbb Hyper** | ✅ Supported & tested | Element links (entry/category/asset/user/product/variant) made portable. |
 | **Freelink** (justinholtweb) | ✅ Supported & tested | Reads the relations-backed link target and rewrites it as a UID. |
 | **Freenav** (justinholtweb) | ✅ No handler needed | The field value is a menu *handle* (already portable). Migrating menu/node definitions is a separate concern, like sections. |
-| **Google Maps** (doublesecretagency) | ✅ No handler needed | Address fields store self-contained JSON. |
-| **Craft Commerce** (products, variants) | ⚠️ Conditional, experimental | Handlers ship but have not been exercised against a live Commerce install. Orders are intentionally excluded. |
+| **Asset files** | ✅ Supported & tested | Real file bytes bundled and recreated in the target volume. (Craft re-encodes EXIF-oriented JPEGs on upload, so bytes may differ; image content is preserved.) |
+| **Craft Commerce 5** (products, variants) | ✅ Supported & tested | Product type, variants (SKU, base price, dimensions, tax/shipping category, custom fields). Inventory levels, catalog pricing, and orders are out of scope. |
+| **Google Maps** (doublesecretagency) | ✅ Supported & tested | Address field; strips environment-specific owner keys, keeps the address data. |
+| **SEOMatic** (nystudio107) | ✅ Supported & tested | SeoSettings field rewrites SEO/OG/Twitter image asset ids to portable UIDs and back. |
+| **Verbb Navigation** | ✅ Supported & tested | Node elements migrate with their element links (→ UIDs), custom URLs, and nested structure; the nav is resolved by handle (it lives in project config). The Navigation *field* needs no handler (stores a nav handle). |
 | **Neo** (spicyweb) | ⚠️ Conditional, experimental | Block-based handler; not yet exercised against a live Neo install. |
 | **Super Table** (verbb) | ⚠️ Conditional, experimental | Block-based handler; not yet exercised against a live Super Table install. |
-| **Verbb Navigation** | ⛔ Planned | Like Freenav, the field references a navigation by handle. Migrating the navigations + nodes (nodes can link to elements) is an element/structure migration best built with the plugin installed for testing. |
-| **Formie** (verbb) | ⛔ Planned | Forms and submissions are elements; migrating form *definitions* and/or submissions is a larger effort. A field that references a form would carry the form handle/UID. |
-| **Freeform** (solspace) | ⛔ Planned | Similar to Formie — forms/submissions are a separate element-migration effort. |
+| **Formie** (verbb) | ✅ Supported & tested | Form definitions migrate via Formie's own export/import; submissions migrate with their field values (form resolved by handle, imported first). Submission values that reference elements rely on the relevant field handler. |
+| **Solspace Calendar** | ✅ Supported & tested | Events migrate with dates, recurrence rules (freq/interval/byDay/etc.), and author; the calendar is resolved by handle. Canonical events only (not expanded occurrences). |
 
 ## Adding your own
 

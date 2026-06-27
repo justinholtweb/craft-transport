@@ -4,6 +4,8 @@ namespace justinholtweb\transport\services;
 
 use Craft;
 use craft\base\ElementInterface;
+use justinholtweb\transport\events\AfterExportEvent;
+use justinholtweb\transport\events\BeforeExportEvent;
 use justinholtweb\transport\models\ExportConfig;
 use justinholtweb\transport\Plugin;
 use justinholtweb\transport\records\ImportHistory;
@@ -15,13 +17,26 @@ use yii\base\Component;
  */
 class Export extends Component
 {
+    /** Raised before an export runs; listeners may adjust or cancel it. */
+    public const EVENT_BEFORE_EXPORT = 'beforeExport';
+
+    /** Raised after a package is written. */
+    public const EVENT_AFTER_EXPORT = 'afterExport';
+
     /**
-     * Runs an export and returns the absolute path to the written package.
+     * Runs an export and returns the absolute path to the written package (empty string
+     * if a {@see self::EVENT_BEFORE_EXPORT} listener cancels it).
      */
     public function export(ExportConfig $config): string
     {
         $plugin = Plugin::getInstance();
         $serializer = $plugin->serializer;
+
+        $beforeEvent = new BeforeExportEvent(['config' => $config]);
+        $this->trigger(self::EVENT_BEFORE_EXPORT, $beforeEvent);
+        if (!$beforeEvent->isValid) {
+            return '';
+        }
 
         $elements = $this->gatherElements($config);
 
@@ -44,6 +59,12 @@ class Export extends Component
         ]);
 
         $this->recordHistory($path, $grouped);
+
+        $this->trigger(self::EVENT_AFTER_EXPORT, new AfterExportEvent([
+            'config' => $config,
+            'path' => $path,
+            'elements' => $grouped,
+        ]));
 
         return $path;
     }

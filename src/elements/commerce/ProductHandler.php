@@ -11,10 +11,11 @@ use justinholtweb\transport\elements\BaseElementHandler;
 use justinholtweb\transport\Plugin;
 
 /**
- * Element handler for Craft Commerce products. Variants are serialized inline.
+ * Element handler for Craft Commerce 5 products. Variants are serialized inline.
  *
- * Only registered when craftcms/commerce is installed. Experimental — not yet exercised
- * against a live Commerce install.
+ * Migrates the product type, tax/shipping categories, and each variant's SKU, base
+ * price, dimensions, default flag, and custom fields. Inventory levels and catalog
+ * pricing rules are out of scope. Only registered when Commerce is installed.
  */
 class ProductHandler extends BaseElementHandler
 {
@@ -36,22 +37,11 @@ class ProductHandler extends BaseElementHandler
     public function serializeAttributes(ElementInterface $element): array
     {
         /** @var Product $element */
-        $commerce = Commerce::getInstance();
-
-        $taxCategory = $element->taxCategoryId
-            ? ($commerce->getTaxCategories()->getTaxCategoryById($element->taxCategoryId)?->handle)
-            : null;
-        $shippingCategory = $element->shippingCategoryId
-            ? ($commerce->getShippingCategories()->getShippingCategoryById($element->shippingCategoryId)?->handle)
-            : null;
-
         return [
             'type' => $element->getType()->handle,
-            'taxCategory' => $taxCategory,
-            'shippingCategory' => $shippingCategory,
             'variants' => array_map(
                 fn(Variant $variant) => $this->serializeVariant($variant),
-                $element->getVariants(true)
+                $element->getVariants(true)->all()
             ),
         ];
     }
@@ -75,18 +65,10 @@ class ProductHandler extends BaseElementHandler
     public function applyAttributes(array $attributes, ElementInterface $element): void
     {
         /** @var Product $element */
-        $commerce = Commerce::getInstance();
-
-        if (!empty($attributes['taxCategory'])) {
-            $element->taxCategoryId = $commerce->getTaxCategories()->getTaxCategoryByHandle($attributes['taxCategory'])?->id;
-        }
-        if (!empty($attributes['shippingCategory'])) {
-            $element->shippingCategoryId = $commerce->getShippingCategories()->getShippingCategoryByHandle($attributes['shippingCategory'])?->id;
-        }
-
+        $variantLayout = $element->getType()->getVariantFieldLayout();
         $variants = [];
-        foreach ($attributes['variants'] ?? [] as $i => $variantData) {
-            $variants['new' . ($i + 1)] = $this->normalizeVariant($variantData);
+        foreach ($attributes['variants'] ?? [] as $data) {
+            $variants[] = $this->buildVariant($data, $variantLayout, $element);
         }
         if ($variants) {
             $element->setVariants($variants);
@@ -95,44 +77,61 @@ class ProductHandler extends BaseElementHandler
 
     private function serializeVariant(Variant $variant): array
     {
+        $commerce = Commerce::getInstance();
+
         return [
-            'sku' => $variant->sku,
+            'sku' => $variant->getSku(),
             'isDefault' => $variant->isDefault,
-            'price' => $variant->price ?? null,
-            'stock' => $variant->stock,
-            'hasUnlimitedStock' => $variant->hasUnlimitedStock,
+            'basePrice' => $variant->getBasePrice(),
             'width' => $variant->width,
             'height' => $variant->height,
             'length' => $variant->length,
             'weight' => $variant->weight,
             'title' => $variant->title,
+            'taxCategory' => $commerce->getTaxCategories()->getTaxCategoryById($variant->getTaxCategoryId())?->handle,
+            'shippingCategory' => $commerce->getShippingCategories()->getShippingCategoryById($variant->getShippingCategoryId())?->handle,
             'fields' => Plugin::getInstance()->serializer->serializeFieldValues($variant),
         ];
     }
 
-    private function normalizeVariant(array $data): array
+    private function buildVariant(array $data, \craft\models\FieldLayout $variantLayout, Product $product): Variant
     {
-        // Build the array shape Commerce expects for a posted/new variant.
-        return [
-            'sku' => $data['sku'] ?? null,
-            'isDefault' => $data['isDefault'] ?? false,
-            'price' => $data['price'] ?? 0,
-            'stock' => $data['stock'] ?? null,
-            'hasUnlimitedStock' => $data['hasUnlimitedStock'] ?? false,
-            'width' => $data['width'] ?? null,
-            'height' => $data['height'] ?? null,
-            'length' => $data['length'] ?? null,
-            'weight' => $data['weight'] ?? null,
-            'title' => $data['title'] ?? null,
-            'fields' => $data['fields'] ?? [],
-        ];
+        $variant = new Variant();
+        $variant->setSku($data['sku'] ?? '');
+        $variant->isDefault = (bool)($data['isDefault'] ?? false);
+        if (isset($data['basePrice'])) {
+            $variant->setBasePrice((float)$data['basePrice']);
+        }
+        foreach (['width', 'height', 'length', 'weight'] as $dim) {
+            if (array_key_exists($dim, $data)) {
+                $variant->$dim = $data[$dim];
+            }
+        }
+        if (!empty($data['title'])) {
+            $variant->title = $data['title'];
+        }
+
+        $commerce = Commerce::getInstance();
+        if (!empty($data['taxCategory'])) {
+            $variant->setTaxCategoryId($commerce->getTaxCategories()->getTaxCategoryByHandle($data['taxCategory'])?->id);
+        }
+        if (!empty($data['shippingCategory'])) {
+            $variant->setShippingCategoryId($commerce->getShippingCategories()->getShippingCategoryByHandle($data['shippingCategory'])?->id);
+        }
+
+        $values = Plugin::getInstance()->normalizer->normalizeFieldValues($data['fields'] ?? [], $variantLayout, $variant);
+        foreach ($values as $handle => $value) {
+            $variant->setFieldValue($handle, $value);
+        }
+
+        return $variant;
     }
 
     public function collectReferences(ElementInterface $element): array
     {
         /** @var Product $element */
         $refs = [];
-        foreach ($element->getVariants(true) as $variant) {
+        foreach ($element->getVariants(true)->all() as $variant) {
             foreach (Plugin::getInstance()->serializer->collectFieldReferences($variant) as $uid) {
                 $refs[] = $uid;
             }

@@ -71,6 +71,22 @@ class ElementRegistry extends Component
             $handlers[] = \justinholtweb\transport\elements\commerce\VariantHandler::class;
         }
 
+        // Verbb Navigation nodes.
+        if (class_exists(\verbb\navigation\elements\Node::class)) {
+            $handlers[] = \justinholtweb\transport\elements\thirdparty\NavigationNodeHandler::class;
+        }
+
+        // Formie forms + submissions.
+        if (class_exists(\verbb\formie\elements\Form::class)) {
+            $handlers[] = \justinholtweb\transport\elements\thirdparty\FormieFormHandler::class;
+            $handlers[] = \justinholtweb\transport\elements\thirdparty\FormieSubmissionHandler::class;
+        }
+
+        // Solspace Calendar events.
+        if (class_exists(\Solspace\Calendar\Elements\Event::class)) {
+            $handlers[] = \justinholtweb\transport\elements\thirdparty\CalendarEventHandler::class;
+        }
+
         $event = new RegisterElementHandlersEvent([
             'handlers' => $handlers,
         ]);
