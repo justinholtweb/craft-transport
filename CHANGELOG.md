@@ -1,5 +1,10 @@
 # Release Notes for Transport
 
+## 5.0.1 — 2026-06-27
+
+### Added
+Correct Craft license.
+
 ## 5.0.0 — 2026-06-27
 
 ### Added
