@@ -1,0 +1,34 @@
+{% extends "_layouts/cp" %}
+
+{% set title = "Import results"|t('transport') %}
+
+{% block content %}
+    {% if dryRun %}
+        <div class="pane" style="margin-bottom:24px;">
+            <strong>{{ "Dry run"|t('transport') }}</strong> —
+            {{ "no changes were saved."|t('transport') }}
+        </div>
+    {% endif %}
+
+    <table class="data fullwidth">
+        <tbody>
+            <tr><th>{{ "Status"|t('transport') }}</th><td>{{ result.status }}</td></tr>
+            <tr><th>{{ "Created"|t('transport') }}</th><td>{{ result.created }}</td></tr>
+            <tr><th>{{ "Updated"|t('transport') }}</th><td>{{ result.updated }}</td></tr>
+            <tr><th>{{ "Skipped"|t('transport') }}</th><td>{{ result.skipped }}</td></tr>
+        </tbody>
+    </table>
+
+    {% if result.errors|length %}
+        <h2 style="margin-top:24px;">{{ "Errors"|t('transport') }}</h2>
+        <ul class="errors">
+            {% for error in result.errors %}
+                <li>{{ error }}</li>
+            {% endfor %}
+        </ul>
+    {% endif %}
+
+    <div class="buttons" style="margin-top:24px;">
+        <a href="{{ url('transport/import') }}" class="btn">{{ "Import another"|t('transport') }}</a>
+    </div>
+{% endblock %}

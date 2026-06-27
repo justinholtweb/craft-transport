@@ -1,0 +1,25 @@
+{% extends "_layouts/cp" %}
+
+{% set title = "Import"|t('transport') %}
+
+{% block content %}
+    <form method="post" accept-charset="UTF-8" enctype="multipart/form-data">
+        {{ csrfInput() }}
+        <input type="hidden" name="action" value="transport/import/configure">
+
+        <p>{{ "Upload a Transport package (.zip) to review and import its content into this environment."|t('transport') }}</p>
+
+        <div class="field">
+            <div class="heading">
+                <label>{{ "Package"|t('transport') }}</label>
+            </div>
+            <div class="input">
+                <input type="file" name="package" accept=".zip" required>
+            </div>
+        </div>
+
+        <div class="buttons">
+            <button type="submit" class="btn submit">{{ "Review import"|t('transport') }}</button>
+        </div>
+    </form>
+{% endblock %}

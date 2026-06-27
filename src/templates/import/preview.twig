@@ -1,0 +1,83 @@
+{% extends "_layouts/cp" %}
+
+{% set title = "Import — Preview"|t('transport') %}
+
+{% set statusColors = { added: 'green', changed: 'orange', removed: 'red' } %}
+
+{% block content %}
+    <form method="post" accept-charset="UTF-8">
+        {{ csrfInput() }}
+        <input type="hidden" name="action" value="transport/import/run">
+        <input type="hidden" name="token" value="{{ token }}">
+
+        <p>{{ "Review the field-level changes below. Uncheck any field to keep the target’s current value."|t('transport') }}</p>
+
+        {% for diff in diffs %}
+            <input type="hidden" name="uids[]" value="{{ diff.uid }}">
+
+            {% set changes = diff.changes %}
+            {% set pathList = [] %}
+            {% for entry in changes %}{% set pathList = pathList|merge([entry.path()]) %}{% endfor %}
+            <input type="hidden" name="paths[{{ diff.uid }}]" value="{{ pathList|join(',') }}">
+
+            <div class="pane" style="margin-bottom:20px;">
+                <h2 style="margin-top:0;">
+                    {{ diff.title }}
+                    <span class="status {{ diff.action == 'add' ? 'green' : 'orange' }}"></span>
+                    <span class="light" style="text-transform:capitalize;">{{ diff.action }}</span>
+                    <span class="light" style="text-transform:capitalize;">· {{ diff.key }}</span>
+                </h2>
+
+                {% if changes|length %}
+                    <table class="data fullwidth">
+                        <thead>
+                            <tr>
+                                <th class="thin">{{ "Apply"|t('transport') }}</th>
+                                <th>{{ "Field"|t('transport') }}</th>
+                                <th>{{ "Current"|t('transport') }}</th>
+                                <th>{{ "Incoming"|t('transport') }}</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for entry in changes %}
+                                <tr>
+                                    <td class="thin">
+                                        <input type="checkbox" name="apply[{{ diff.uid }}][]"
+                                            value="{{ entry.path() }}" checked>
+                                    </td>
+                                    <td>
+                                        <span class="status {{ statusColors[entry.status] ?? 'light' }}"></span>
+                                        {{ entry.field }}
+                                        <span class="light">({{ entry.site }})</span>
+                                    </td>
+                                    <td><code>{{ entry.oldDisplay }}</code></td>
+                                    <td><code>{{ entry.newDisplay }}</code></td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                {% else %}
+                    <p class="light">{{ "No field changes."|t('transport') }}</p>
+                {% endif %}
+            </div>
+        {% endfor %}
+
+        <div class="field">
+            <div class="input">
+                <label>
+                    <input type="checkbox" name="dryRun" value="1">
+                    {{ "Dry run (simulate without saving)"|t('transport') }}
+                </label>
+                <br>
+                <label>
+                    <input type="checkbox" name="queue" value="1">
+                    {{ "Run in the background (recommended for large imports)"|t('transport') }}
+                </label>
+            </div>
+        </div>
+
+        <div class="buttons">
+            <button type="submit" class="btn submit">{{ "Run import"|t('transport') }}</button>
+        </div>
+    </form>
+{% endblock %}

@@ -1,0 +1,67 @@
+{% import "_includes/forms" as forms %}
+
+{{ forms.autosuggestField({
+    label: "Temp path"|t('transport'),
+    instructions: "Directory used to stage package files during export and import. Supports aliases and environment variables."|t('transport'),
+    id: 'tempPath',
+    name: 'tempPath',
+    suggestEnvVars: true,
+    value: settings.tempPath,
+    errors: settings.getErrors('tempPath'),
+}) }}
+
+{{ forms.textField({
+    label: "Max package size (MB)"|t('transport'),
+    instructions: "Largest package that may be uploaded for import."|t('transport'),
+    id: 'maxPackageSize',
+    name: 'maxPackageSize',
+    type: 'number',
+    size: 8,
+    value: settings.maxPackageSize,
+    errors: settings.getErrors('maxPackageSize'),
+}) }}
+
+{{ forms.lightswitchField({
+    label: "Include asset files"|t('transport'),
+    instructions: "Bundle actual asset files into export packages by default. Disable to export asset metadata only."|t('transport'),
+    id: 'includeAssetFiles',
+    name: 'includeAssetFiles',
+    on: settings.includeAssetFiles,
+    errors: settings.getErrors('includeAssetFiles'),
+}) }}
+
+{{ forms.textField({
+    label: "Snapshot retention (days)"|t('transport'),
+    instructions: "How long to keep pre-import snapshots before pruning."|t('transport'),
+    id: 'snapshotRetentionDays',
+    name: 'snapshotRetentionDays',
+    type: 'number',
+    size: 8,
+    value: settings.snapshotRetentionDays,
+    errors: settings.getErrors('snapshotRetentionDays'),
+}) }}
+
+{{ forms.textField({
+    label: "Snapshot retention (count)"|t('transport'),
+    instructions: "Maximum number of recent imports to keep snapshots for, regardless of age."|t('transport'),
+    id: 'snapshotRetentionCount',
+    name: 'snapshotRetentionCount',
+    type: 'number',
+    size: 8,
+    value: settings.snapshotRetentionCount,
+    errors: settings.getErrors('snapshotRetentionCount'),
+}) }}
+
+{{ forms.selectField({
+    label: "Log level"|t('transport'),
+    id: 'logLevel',
+    name: 'logLevel',
+    options: [
+        { label: 'Error'|t('transport'), value: 'error' },
+        { label: 'Warning'|t('transport'), value: 'warning' },
+        { label: 'Info'|t('transport'), value: 'info' },
+        { label: 'Debug'|t('transport'), value: 'debug' },
+    ],
+    value: settings.logLevel,
+    errors: settings.getErrors('logLevel'),
+}) }}

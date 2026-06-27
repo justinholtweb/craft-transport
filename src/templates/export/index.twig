@@ -1,0 +1,67 @@
+{% extends "_layouts/cp" %}
+{% import "_includes/forms" as forms %}
+
+{% set title = "Export"|t('transport') %}
+
+{% block content %}
+    <form method="post" accept-charset="UTF-8">
+        {{ csrfInput() }}
+        <input type="hidden" name="action" value="transport/export/run">
+
+        <p>{{ "Export content into a portable package you can import into another environment."|t('transport') }}</p>
+
+        {% set siteOptions = [] %}
+        {% for site in craft.app.sites.allSites %}
+            {% set siteOptions = siteOptions|merge([{ label: site.name, value: site.handle }]) %}
+        {% endfor %}
+
+        {{ forms.selectField({
+            label: "Site"|t('transport'),
+            name: 'site',
+            options: siteOptions,
+            value: craft.app.sites.primarySite.handle,
+        }) }}
+
+        {% set typeOptions = [] %}
+        {% for key in packageKeys %}
+            {% set typeOptions = typeOptions|merge([{ label: key|capitalize, value: key }]) %}
+        {% endfor %}
+
+        {{ forms.checkboxGroupField({
+            label: "Element types"|t('transport'),
+            instructions: "Which content types to include in the package."|t('transport'),
+            name: 'packageKeys',
+            options: typeOptions,
+            values: ['entries'],
+        }) }}
+
+        {% set sectionOptions = [{ label: "All sections"|t('transport'), value: '' }] %}
+        {% for section in sections %}
+            {% set sectionOptions = sectionOptions|merge([{ label: section.name, value: section.handle }]) %}
+        {% endfor %}
+
+        {{ forms.selectField({
+            label: "Section"|t('transport'),
+            instructions: "Which entries to export."|t('transport'),
+            name: 'section',
+            options: sectionOptions,
+        }) }}
+
+        {{ forms.textField({
+            label: "Package name"|t('transport'),
+            instructions: "Optional filename for the package (without extension)."|t('transport'),
+            name: 'packageName',
+            placeholder: 'transport-export',
+        }) }}
+
+        {{ forms.lightswitchField({
+            label: "Include asset files"|t('transport'),
+            name: 'includeAssetFiles',
+            on: true,
+        }) }}
+
+        <div class="buttons">
+            <button type="submit" class="btn submit">{{ "Export package"|t('transport') }}</button>
+        </div>
+    </form>
+{% endblock %}

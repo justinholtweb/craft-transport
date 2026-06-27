@@ -1,0 +1,91 @@
+{% extends "_layouts/cp" %}
+
+{% set title = "Import — Configure"|t('transport') %}
+
+{% set actionLabels = {
+    add: "Add"|t('transport'),
+    update: "Update"|t('transport'),
+    unchanged: "Unchanged"|t('transport'),
+} %}
+{% set actionColors = { add: 'green', update: 'orange', unchanged: 'light' } %}
+
+{% block content %}
+    <form method="post" accept-charset="UTF-8">
+        {{ csrfInput() }}
+        <input type="hidden" name="action" value="transport/import/preview">
+        <input type="hidden" name="token" value="{{ token }}">
+
+        {% if validation.errors|length %}
+            <div class="pane" style="margin-bottom:16px;border-left:3px solid #cf1124;">
+                <strong>{{ "Errors — import is blocked"|t('transport') }}</strong>
+                <ul class="errors">
+                    {% for e in validation.errors %}<li>{{ e }}</li>{% endfor %}
+                </ul>
+            </div>
+        {% endif %}
+        {% if validation.warnings|length %}
+            <div class="pane" style="margin-bottom:16px;border-left:3px solid #e3a008;">
+                <strong>{{ "Warnings"|t('transport') }}</strong>
+                <ul>
+                    {% for w in validation.warnings %}<li>{{ w }}</li>{% endfor %}
+                </ul>
+            </div>
+        {% endif %}
+
+        <div class="pane" style="margin-bottom:24px;">
+            <strong>{{ "Summary"|t('transport') }}:</strong>
+            {{ summary.add }} {{ "to add"|t('transport') }},
+            {{ summary.update }} {{ "to update"|t('transport') }},
+            {{ summary.unchanged }} {{ "unchanged"|t('transport') }}.
+        </div>
+
+        <p>
+            <button type="button" class="btn" data-select-all>{{ "Select all"|t('transport') }}</button>
+            <button type="button" class="btn" data-select-none>{{ "Select none"|t('transport') }}</button>
+        </p>
+
+        {% for key, diffs in groups %}
+            <h2 style="text-transform:capitalize;">{{ key }} ({{ diffs|length }})</h2>
+            <table class="data fullwidth" style="margin-bottom:24px;">
+                <thead>
+                    <tr>
+                        <th class="thin"></th>
+                        <th>{{ "Title"|t('transport') }}</th>
+                        <th>{{ "Action"|t('transport') }}</th>
+                        <th>{{ "Changes"|t('transport') }}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for diff in diffs %}
+                        <tr>
+                            <td class="thin">
+                                <input type="checkbox" name="uids[]" value="{{ diff.uid }}"
+                                    class="transport-select"
+                                    {{ diff.action != 'unchanged' ? 'checked' }}>
+                            </td>
+                            <td>{{ diff.title }}</td>
+                            <td>
+                                <span class="status {{ actionColors[diff.action] }}"></span>
+                                {{ actionLabels[diff.action] }}
+                            </td>
+                            <td>{{ diff.action == 'update' ? diff.changeCount : (diff.action == 'add' ? '—' : '0') }}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% endfor %}
+
+        <div class="buttons">
+            <button type="submit" class="btn submit">{{ "Preview changes"|t('transport') }}</button>
+        </div>
+    </form>
+
+    {% js %}
+        document.querySelector('[data-select-all]')?.addEventListener('click', () => {
+            document.querySelectorAll('.transport-select').forEach(c => c.checked = true);
+        });
+        document.querySelector('[data-select-none]')?.addEventListener('click', () => {
+            document.querySelectorAll('.transport-select').forEach(c => c.checked = false);
+        });
+    {% endjs %}
+{% endblock %}

@@ -1,0 +1,57 @@
+{% extends "_layouts/cp" %}
+
+{% set title = "History"|t('transport') %}
+
+{% set statusColors = {
+    completed: 'green', failed: 'red', running: 'orange',
+    rolled_back: 'light', pending: 'light',
+} %}
+
+{% block content %}
+    {% if history|length %}
+        <table class="data fullwidth">
+            <thead>
+                <tr>
+                    <th>{{ "Date"|t('transport') }}</th>
+                    <th>{{ "Direction"|t('transport') }}</th>
+                    <th>{{ "Package"|t('transport') }}</th>
+                    <th>{{ "Status"|t('transport') }}</th>
+                    <th>{{ "Elements"|t('transport') }}</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in history %}
+                    <tr>
+                        <td><a href="{{ url('transport/history/' ~ row.id) }}">{{ row.dateCreated|datetime('short') }}</a></td>
+                        <td>{{ row.direction }}</td>
+                        <td>{{ row.packageName }}</td>
+                        <td>
+                            <span class="status {{ statusColors[row.status] ?? 'light' }}"></span>
+                            {{ row.status }}
+                        </td>
+                        <td>
+                            {% set counts = row.countsArray %}
+                            {% for key, count in counts %}{{ key }}: {{ count }}{% if not loop.last %}, {% endif %}{% endfor %}
+                        </td>
+                        <td class="thin">
+                            {% if canRollback and row.direction == 'import' and row.snapshotId and row.status == 'completed' %}
+                                <form method="post" style="margin:0;">
+                                    {{ csrfInput() }}
+                                    <input type="hidden" name="action" value="transport/history/rollback">
+                                    <input type="hidden" name="id" value="{{ row.id }}">
+                                    <button type="submit" class="btn small"
+                                        data-confirm="{{ 'Roll back this import?'|t('transport') }}">
+                                        {{ "Roll back"|t('transport') }}
+                                    </button>
+                                </form>
+                            {% endif %}
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <p>{{ "No imports or exports yet."|t('transport') }}</p>
+    {% endif %}
+{% endblock %}

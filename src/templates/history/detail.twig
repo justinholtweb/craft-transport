@@ -1,0 +1,41 @@
+{% extends "_layouts/cp" %}
+
+{% set title = "Import ##{record.id}"|t('transport') %}
+{% set crumbs = [{ label: "History"|t('transport'), url: url('transport/history') }] %}
+
+{% block content %}
+    <table class="data fullwidth" style="margin-bottom:24px;">
+        <tbody>
+            <tr><th>{{ "Date"|t('transport') }}</th><td>{{ record.dateCreated|datetime('short') }}</td></tr>
+            <tr><th>{{ "Direction"|t('transport') }}</th><td>{{ record.direction }}</td></tr>
+            <tr><th>{{ "Package"|t('transport') }}</th><td>{{ record.packageName }}</td></tr>
+            <tr><th>{{ "Status"|t('transport') }}</th><td>{{ record.status }}</td></tr>
+            <tr>
+                <th>{{ "Elements"|t('transport') }}</th>
+                <td>
+                    {% for key, count in record.countsArray %}{{ key }}: {{ count }}{% if not loop.last %}, {% endif %}{% endfor %}
+                </td>
+            </tr>
+            <tr><th>{{ "Snapshot"|t('transport') }}</th><td>{{ record.snapshotId ? "Available"|t('transport') : "—" }}</td></tr>
+        </tbody>
+    </table>
+
+    {% if errors|length %}
+        <h2>{{ "Errors"|t('transport') }}</h2>
+        <ul class="errors">
+            {% for error in errors %}<li>{{ error }}</li>{% endfor %}
+        </ul>
+    {% endif %}
+
+    {% if canRollback and record.direction == 'import' and record.snapshotId and record.status == 'completed' %}
+        <form method="post" style="margin-top:24px;">
+            {{ csrfInput() }}
+            <input type="hidden" name="action" value="transport/history/rollback">
+            <input type="hidden" name="id" value="{{ record.id }}">
+            <button type="submit" class="btn submit"
+                data-confirm="{{ 'Roll back this import?'|t('transport') }}">
+                {{ "Roll back this import"|t('transport') }}
+            </button>
+        </form>
+    {% endif %}
+{% endblock %}

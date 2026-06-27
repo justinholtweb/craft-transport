@@ -1,0 +1,14 @@
+{% extends "_layouts/cp" %}
+{% import "_includes/forms" as forms %}
+
+{% set title = "Transport Settings"|t('transport') %}
+{% set fullPageForm = true %}
+
+{% block content %}
+    <input type="hidden" name="action" value="transport/settings/save">
+    {{ redirectInput('transport/settings') }}
+
+    {% namespace 'settings' %}
+        {% include "transport/_settings" %}
+    {% endnamespace %}
+{% endblock %}

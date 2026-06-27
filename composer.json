@@ -1,0 +1,70 @@
+{
+    "name": "justinholtweb/craft-transport",
+    "description": "Safely migrate content between Craft CMS environments with automatic dependency resolution, field-level conflict review, and snapshot-based rollback.",
+    "type": "craft-plugin",
+    "version": "5.0.0",
+    "keywords": [
+        "craft",
+        "cms",
+        "craftcms",
+        "craft-plugin",
+        "transport",
+        "migration",
+        "content-migration",
+        "deployment",
+        "sync"
+    ],
+    "license": "proprietary",
+    "minimum-stability": "dev",
+    "prefer-stable": true,
+    "authors": [
+        {
+            "name": "Justin Holt",
+            "homepage": "https://justinholt.com"
+        }
+    ],
+    "support": {
+        "docs": "https://craft-transport.com/docs",
+        "source": "https://github.com/justinholtweb/craft-transport",
+        "issues": "https://github.com/justinholtweb/craft-transport/issues"
+    },
+    "require": {
+        "php": "^8.2",
+        "ext-zip": "*",
+        "craftcms/cms": "^5.3.0"
+    },
+    "require-dev": {
+        "craftcms/ecs": "dev-main",
+        "craftcms/phpstan": "dev-main",
+        "phpunit/phpunit": "^10.5"
+    },
+    "autoload": {
+        "psr-4": {
+            "justinholtweb\\transport\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "justinholtweb\\transport\\tests\\": "tests/"
+        }
+    },
+    "scripts": {
+        "test": "phpunit"
+    },
+    "config": {
+        "allow-plugins": {
+            "yiisoft/yii2-composer": true,
+            "craftcms/plugin-installer": true,
+            "craftcms/generator": true
+        }
+    },
+    "extra": {
+        "name": "Transport",
+        "handle": "transport",
+        "developer": "Justin Holt",
+        "developerUrl": "https://justinholt.com",
+        "documentationUrl": "https://craft-transport.com/docs",
+        "changelogUrl": "https://raw.githubusercontent.com/justinholtweb/craft-transport/main/CHANGELOG.md",
+        "class": "justinholtweb\\transport\\Plugin"
+    }
+}
