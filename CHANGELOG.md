@@ -1,5 +1,10 @@
 # Release Notes for Transport
 
+## 5.0.2 — 2026-06-28
+
+### Changed
+- Updated plugin icon and icon mask.
+
 ## 5.0.1 — 2026-06-27
 
 ### Added
