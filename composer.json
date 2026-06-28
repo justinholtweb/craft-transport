@@ -2,7 +2,7 @@
     "name": "justinholtweb/craft-transport",
     "description": "Safely migrate content between Craft CMS environments with automatic dependency resolution, field-level conflict review, and snapshot-based rollback.",
     "type": "craft-plugin",
-    "version": "5.0.0",
+    "version": "5.0.2",
     "keywords": [
         "craft",
         "cms",
