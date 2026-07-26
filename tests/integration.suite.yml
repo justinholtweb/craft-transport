@@ -1,0 +1,21 @@
+actor: IntegrationTester
+modules:
+    enabled:
+        - \craft\test\Craft:
+              configFile: "tests/_craft/config/test.php"
+              entryUrl: "https://test.craftcms.test/index.php"
+              # `reset: false` skips a full project-config rebuild between tests.
+              # Every test runs inside a transaction, so state can't leak anyway.
+              projectConfig:
+                  reset: false
+              migrations: []
+              plugins:
+                  - class: justinholtweb\transport\Plugin
+                    handle: transport
+              cleanup: true
+              transaction: true
+              dbSetup:
+                  clean: true
+                  setupCraft: true
+        - \Codeception\Module\Asserts
+    step_decorators: ~

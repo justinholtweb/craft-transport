@@ -1,34 +1,61 @@
 # Tests
 
-Transport has two test suites.
+Transport has two independent test suites.
 
-## Unit tests
+## Unit tests (PHPUnit)
 
-Pure-logic tests with no Craft dependency (dependency graph, resolver, selective merge,
-package model, diff models). Fast, and suitable for CI.
+Pure-logic tests with no booted Craft application: the dependency graph and resolver,
+the selective-merge engine, and the package / diff / config / settings models. They only
+need Composer's autoloader plus Yii's bootstrap (for Craft model validation), so they're
+fast and CI-friendly.
 
 ```bash
 composer install
-vendor/bin/phpunit
+composer test          # or: vendor/bin/phpunit
 ```
 
-## Integration tests
+## Integration tests (Craft + Codeception)
 
-End-to-end tests that exercise the full export → import pipeline against a **real, booted
-Craft application** — UID-based serialization, round-trip recreation, dependency
-ordering, selective merge, and rollback. They create and clean up their own fixtures (a
-dedicated category group), so they don't depend on a particular site's schema.
+End-to-end tests that exercise the real export → import pipeline against a **booted Craft
+application** backed by a throwaway `test` database: UID-based serialization, field
+portability (relations, Matrix), dependency ordering, selective merge, snapshot/rollback,
+asset file transfer, and pre-flight validation.
 
-Because they boot Craft, they must run from within a Craft project. Point
-`CRAFT_BASE_PATH` at the project root (it defaults to `/var/www/html`, the path used by
-the DDEV development site):
+Each test builds the schema it needs (sections, category/tag groups, fields, volumes) on
+demand and runs inside a transaction, so nothing leaks between tests or persists after the
+run.
+
+### Running with DDEV (recommended)
+
+The repo ships a DDEV config (`.ddev/config.yaml`, PHP 8.2 + MariaDB 10.11). From the
+project root:
 
 ```bash
-CRAFT_BASE_PATH=/path/to/craft-project vendor/bin/phpunit -c phpunit-integration.xml
+ddev start
+ddev exec 'mysql -uroot -proot -e "CREATE DATABASE IF NOT EXISTS test"'   # first run only
+ddev exec vendor/bin/codecept run integration
 ```
 
-In the development environment (DDEV), with the plugin mounted at `/var/www/craft-transport`:
+Test-database credentials live in `tests/.env` and target DDEV's `db` host by default.
 
-```bash
-ddev exec 'cd /var/www/craft-transport && CRAFT_BASE_PATH=/var/www/html vendor/bin/phpunit -c phpunit-integration.xml'
+### Running elsewhere
+
+Any environment with PHP 8.2+ and a MySQL/MariaDB `test` database works. Point
+`tests/.env` at your database and run `vendor/bin/codecept run integration`.
+
+## Layout
+
 ```
+tests/
+  bootstrap.php                 PHPUnit bootstrap (autoloader + Yii)
+  _bootstrap.php                Codeception bootstrap (boots Craft)
+  .env                          test DB credentials (DDEV defaults)
+  integration.suite.yml         Craft module config (transactional, self-cleaning)
+  _craft/                       throwaway Craft config/storage for the test app
+  _support/                     Codeception actor classes
+  unit/                         PHPUnit tests
+  integration/                  Codeception tests
+    TransportTestCase.php       shared schema + element fixtures
+```
+
+`codeception.yml` lives at the project root.

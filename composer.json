@@ -2,7 +2,7 @@
     "name": "justinholtweb/craft-transport",
     "description": "Safely migrate content between Craft CMS environments with automatic dependency resolution, field-level conflict review, and snapshot-based rollback.",
     "type": "craft-plugin",
-    "version": "5.0.2",
+    "version": "5.0.3",
     "keywords": [
         "craft",
         "cms",
@@ -36,7 +36,16 @@
     "require-dev": {
         "craftcms/ecs": "dev-main",
         "craftcms/phpstan": "dev-main",
-        "phpunit/phpunit": "^10.5"
+        "phpunit/phpunit": "^10.5",
+        "codeception/codeception": "^5.2.0",
+        "codeception/lib-innerbrowser": "^4.1",
+        "codeception/module-asserts": "^3.0.0",
+        "codeception/module-datafactory": "^3.0.0",
+        "codeception/module-phpbrowser": "^3.0.0",
+        "codeception/module-yii2": "^1.1.9",
+        "fakerphp/faker": "^1.19.0",
+        "league/factory-muffin": "^3.3.0",
+        "vlucas/phpdotenv": "^5.4.1"
     },
     "autoload": {
         "psr-4": {
@@ -49,7 +58,8 @@
         }
     },
     "scripts": {
-        "test": "phpunit"
+        "test": "phpunit",
+        "test-integration": "codecept run integration"
     },
     "config": {
         "allow-plugins": {

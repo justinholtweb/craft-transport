@@ -3,3 +3,10 @@
 /.phpunit.cache
 .DS_Store
 *.log
+
+# Local dev tooling — not part of the distributed plugin
+/.ddev
+
+# Codeception
+/tests/_output
+/tests/_craft/storage

@@ -1,5 +1,14 @@
 # Release Notes for Transport
 
+## 5.0.3 — 2026-07-26
+
+### Added
+- Comprehensive automated test coverage: a PHPUnit unit suite (dependency
+  resolution, selective merge, and the package/diff/settings/config models) and a
+  Craft-booted Codeception integration suite exercising the full export → import
+  pipeline — serialization, relation/Matrix field portability, dependency ordering,
+  selective merge, snapshot/rollback, asset file transfer, and pre-flight validation.
+
 ## 5.0.2 — 2026-06-28
 
 ### Changed
