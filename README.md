@@ -48,6 +48,43 @@ composer require justinholtweb/craft-transport
 php craft plugin/install transport
 ```
 
+### Updating
+
+```bash
+composer update justinholtweb/craft-transport
+php craft up
+```
+
+Craft records Transport's schema version in your project config when its migrations run,
+and normally writes that out to `config/project/` as the command exits. If the environment
+has *pending project config changes* when you update, though, `craft up` applies config
+before writing the files, stops on the version mismatch, and returns early — so the new
+version never lands in the files:
+
+```
+Transport is installed with schema version of 1.1.0 while 1.0.0 was expected.
+```
+
+The database is already migrated at that point; only the config files are behind. Check
+what's pending:
+
+```bash
+php craft project-config/diff
+```
+
+If none of it matters, `php craft project-config/write` regenerates the files with the new
+version. If you need those changes applied, set the version in
+`config/project/project.yaml` so the two agree:
+
+```yaml
+plugins:
+  transport:
+    schemaVersion: 1.1.0
+```
+
+then run `php craft up` again. Either way, commit the updated project config so other
+environments don't hit the same mismatch.
+
 ## Exporting
 
 **Control panel:** *Transport → Export*. Choose the site, the element types to include,

@@ -10,6 +10,18 @@
 > UID rather than adding a second copy of it. Turn this off under *Settings → Match
 > existing content on import* if you rely on strict UID-only identity.
 
+> {warning} This release adds a database column, so Transport's schema version moves from
+> 1.0.0 to 1.1.0. Craft records that in your project config for you when the migration runs
+> — but if the environment also has pending project config changes, `craft up` applies
+> config before it writes the config files back out, stops on the version mismatch
+> (“Transport is installed with schema version of 1.1.0 while 1.0.0 was expected”), and
+> returns before the new version reaches `config/project/`. Your database is already
+> migrated at that point; only the config files are behind. Run `php craft
+> project-config/diff` to see what's pending: if none of it matters, `php craft
+> project-config/write` regenerates the files with the new version; if you need those
+> changes applied, set `plugins.transport.schemaVersion: 1.1.0` in
+> `config/project/project.yaml` so the versions match, then run `php craft up` again.
+
 ### Added
 - Control panel exports and imports now run as queue jobs, so large runs can't hit a
   request timeout. Queued exports are downloaded from *Transport → History* when they
