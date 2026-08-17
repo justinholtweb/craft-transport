@@ -1,0 +1,97 @@
+{% set detailLimit = 25 %}
+{% set isExport = report.direction == 'export' %}
+{% set labels = {
+    created: isExport ? "Exported"|t('transport') : "Added"|t('transport'),
+    updated: "Updated"|t('transport'),
+    skipped: "Skipped"|t('transport'),
+    failed: "Failed"|t('transport'),
+} %}
+
+<html lang="{{ language }}">
+<head><meta http-equiv="Content-Type" content="text/html charset=UTF-8"></head>
+<body>
+<div style="max-width:640px;font-size:14px;line-height:20px;font-family:HelveticaNeue,Helvetica,Arial,sans-serif;color:#1f2933;">
+
+    <h1 style="font-size:18px;margin:0 0 4px;">
+        {{ isExport ? "Export"|t('transport') : "Import"|t('transport') }}
+        {{ report.status }}
+    </h1>
+    <p style="margin:0 0 16px;color:#666;">
+        {{ systemName }} · {{ report.packageName }} · {{ "%.1fs"|format(report.duration) }}
+        {% if report.dryRun %}<br><strong>{{ "Dry run — nothing was saved."|t('transport') }}</strong>{% endif %}
+    </p>
+
+    <table cellpadding="0" cellspacing="0" style="margin:0 0 20px;font-size:14px;">
+        <tr>
+            {% for action, label in labels %}
+                <td style="padding:0 24px 0 0;">
+                    <div style="font-size:22px;font-weight:bold;">{{ report.countOf(action) }}</div>
+                    <div style="color:#666;">{{ label }}</div>
+                </td>
+            {% endfor %}
+        </tr>
+    </table>
+
+    {% if report.countsByKey|length %}
+        <h2 style="font-size:15px;margin:0 0 6px;">{{ "By type"|t('transport') }}</h2>
+        <table cellpadding="0" cellspacing="0" style="margin:0 0 20px;font-size:14px;">
+            {% for key, counts in report.countsByKey %}
+                <tr>
+                    <td style="padding:2px 16px 2px 0;text-transform:capitalize;">{{ key }}</td>
+                    <td style="padding:2px 0;color:#666;">
+                        {%- set parts = [] %}
+                        {%- for action, label in labels %}
+                            {%- if counts[action] ?? 0 %}
+                                {%- set parts = parts|merge([label|lower ~ ' ' ~ counts[action]]) %}
+                            {%- endif %}
+                        {%- endfor %}
+                        {{- parts|join(', ') }}
+                    </td>
+                </tr>
+            {% endfor %}
+        </table>
+    {% endif %}
+
+    {% for action, label in labels %}
+        {% set items = report.itemsFor(action) %}
+        {% if items|length %}
+            <h2 style="font-size:15px;margin:0 0 6px;">{{ label }} ({{ report.countOf(action) }})</h2>
+            <table cellpadding="0" cellspacing="0" style="margin:0 0 20px;font-size:13px;width:100%;">
+                {% for item in items|slice(0, detailLimit) %}
+                    <tr>
+                        <td style="padding:4px 12px 4px 0;border-bottom:1px solid #eee;">{{ item.title }}</td>
+                        <td style="padding:4px 12px 4px 0;border-bottom:1px solid #eee;color:#666;">{{ item.key }}</td>
+                        <td style="padding:4px 0;border-bottom:1px solid #eee;color:#666;">{{ item.detail }}</td>
+                    </tr>
+                {% endfor %}
+                {% if items|length > detailLimit %}
+                    <tr><td colspan="3" style="padding:4px 0;color:#666;">
+                        {{ "…and {n} more"|t('transport', { n: items|length - detailLimit }) }}
+                    </td></tr>
+                {% endif %}
+            </table>
+        {% endif %}
+    {% endfor %}
+
+    {% if report.truncated %}
+        <p style="color:#666;">{{ "Per-element detail was capped; the totals above are complete."|t('transport') }}</p>
+    {% endif %}
+
+    {% if report.errors|length %}
+        <h2 style="font-size:15px;margin:0 0 6px;color:#cf1124;">{{ "Errors"|t('transport') }}</h2>
+        <ul style="margin:0 0 20px;padding-left:18px;color:#cf1124;">
+            {% for error in report.errors|slice(0, detailLimit) %}<li>{{ error }}</li>{% endfor %}
+            {% set hidden = max(report.errors|length - detailLimit, 0) + report.errorOverflow %}
+            {% if report.errors|length > detailLimit or report.errorOverflow %}
+                <li>{{ "…and {n} more"|t('transport', { n: hidden }) }}</li>
+            {% endif %}
+        </ul>
+    {% endif %}
+
+    {% if historyUrl %}
+        <p><a href="{{ historyUrl }}">{{ "View the full report in the control panel"|t('transport') }}</a></p>
+    {% endif %}
+
+</div>
+</body>
+</html>

@@ -39,12 +39,20 @@ class ExportConfig extends Model
      */
     public ?string $packageName = null;
 
+    /**
+     * @var int|null The user to credit in history and notify on completion. Defaults to
+     *               the logged-in user; queue jobs and console runs must set it, since
+     *               they have no session of their own.
+     */
+    public ?int $userId = null;
+
     public function rules(): array
     {
         return [
             [['elementIds'], 'each', 'rule' => ['integer']],
             [['packageKeys'], 'each', 'rule' => ['string']],
             [['section', 'site', 'packageName'], 'string'],
+            [['userId'], 'integer'],
             [['includeAssetFiles'], 'boolean'],
         ];
     }

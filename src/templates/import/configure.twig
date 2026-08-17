@@ -67,6 +67,12 @@
                             <td>
                                 <span class="status {{ actionColors[diff.action] }}"></span>
                                 {{ actionLabels[diff.action] }}
+                                {% if diff.matchedByNaturalKey %}
+                                    <span class="light" data-icon="info"
+                                        title="{{ 'This already exists here under a different UID. Importing updates it instead of adding a copy.'|t('transport') }}">
+                                        {{ "matched existing"|t('transport') }}
+                                    </span>
+                                {% endif %}
                             </td>
                             <td>{{ diff.action == 'update' ? diff.changeCount : (diff.action == 'add' ? '—' : '0') }}</td>
                         </tr>

@@ -3,6 +3,8 @@
 namespace justinholtweb\transport\helpers;
 
 use craft\base\ElementInterface;
+use justinholtweb\transport\elements\MatchesExistingElements;
+use justinholtweb\transport\Plugin;
 
 /**
  * UID-based identity resolution.
@@ -45,6 +47,72 @@ class IdentityHelper
             ->site('*')
             ->unique()
             ->one();
+    }
+
+    /**
+     * Resolves a UID to the local element instance within one site, or null.
+     *
+     * @param class-string<ElementInterface> $elementType
+     */
+    public static function resolveElementInSite(string $uid, string $elementType, int $siteId): ?ElementInterface
+    {
+        return $elementType::find()
+            ->uid($uid)
+            ->siteId($siteId)
+            ->status(null)
+            ->drafts(null)
+            ->revisions(null)
+            ->one();
+    }
+
+    /**
+     * Resolves the element an incoming package element should be written to: the one
+     * carrying its UID, or — when nothing does — the one its handler recognises as the
+     * same content under a different UID.
+     *
+     * The fallback is what makes an import land on the single, category or asset that
+     * already exists here rather than trying to create a second copy of it, which Craft
+     * would either duplicate or refuse to save. It applies only to elements being
+     * imported: references between elements are resolved by UID alone, through
+     * {@see resolveElement()}, so a relation can never be silently repointed.
+     *
+     * @param array $data Serialized element payload.
+     * @param int|null $siteId Restrict to one site, or null to match in any site.
+     */
+    public static function resolveImportTarget(array $data, ?int $siteId = null): ?ElementInterface
+    {
+        $uid = $data['uid'] ?? '';
+        $type = $data['type'] ?? '';
+
+        if ($uid === '' || $type === '') {
+            return null;
+        }
+
+        $element = $siteId === null
+            ? self::resolveElement($uid, $type)
+            : self::resolveElementInSite($uid, $type, $siteId);
+
+        if ($element !== null || !Plugin::getInstance()->getSettings()->matchExistingElements) {
+            return $element;
+        }
+
+        $handler = Plugin::getInstance()->elementRegistry->getHandlerForType($type);
+
+        return $handler instanceof MatchesExistingElements
+            ? $handler->matchExisting($data, $siteId)
+            : null;
+    }
+
+    /**
+     * Whether the resolved element is the same content under a different UID, rather
+     * than the UID the package carries — worth reporting, since it means the import is
+     * adopting something it didn't create.
+     */
+    public static function isNaturalKeyMatch(array $data, ?ElementInterface $element): bool
+    {
+        return $element !== null
+            && isset($data['uid'])
+            && $element->uid !== $data['uid'];
     }
 
     /**

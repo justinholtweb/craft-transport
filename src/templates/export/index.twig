@@ -8,7 +8,10 @@
         {{ csrfInput() }}
         <input type="hidden" name="action" value="transport/export/run">
 
-        <p>{{ "Export content into a portable package you can import into another environment."|t('transport') }}</p>
+        <p>
+            {{ "Export content into a portable package you can import into another environment."|t('transport') }}
+            {{ "Exports run in the background, so large sites can’t time out — the package appears on the History screen when it’s ready."|t('transport') }}
+        </p>
 
         {% set siteOptions = [] %}
         {% for site in craft.app.sites.allSites %}
@@ -60,8 +63,15 @@
             on: true,
         }) }}
 
+        {{ forms.lightswitchField({
+            label: "Email me when it finishes"|t('transport'),
+            instructions: "Send a completion report to your account’s email address."|t('transport'),
+            name: 'notify',
+            on: settings.notifyOnCompletion ?? true,
+        }) }}
+
         <div class="buttons">
-            <button type="submit" class="btn submit">{{ "Export package"|t('transport') }}</button>
+            <button type="submit" class="btn submit">{{ "Queue export"|t('transport') }}</button>
         </div>
     </form>
 {% endblock %}

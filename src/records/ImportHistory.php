@@ -5,6 +5,7 @@ namespace justinholtweb\transport\records;
 use craft\db\ActiveRecord;
 use craft\helpers\Json;
 use craft\records\User;
+use justinholtweb\transport\models\TransportReport;
 use yii\db\ActiveQueryInterface;
 
 /**
@@ -15,6 +16,7 @@ use yii\db\ActiveQueryInterface;
  * @property string $direction
  * @property string $status
  * @property array|null $elementCounts
+ * @property array|string|null $report
  * @property string|null $errorLog
  * @property int|null $snapshotId
  * @property int|null $userId
@@ -48,6 +50,30 @@ class ImportHistory extends ActiveRecord
             $value = Json::decodeIfJson($value);
         }
         return is_array($value) ? $value : [];
+    }
+
+    /**
+     * Stores the detailed run report as JSON.
+     *
+     * Named around the model rather than the column because `$record->report` resolves
+     * to the raw attribute — the same reason {@see getCountsArray()} exists.
+     */
+    public function setRunReport(?TransportReport $report): void
+    {
+        $this->report = $report === null ? null : Json::encode($report->toStorageArray());
+    }
+
+    /**
+     * Rebuilds the detailed run report, or null for rows written before reports existed.
+     */
+    public function getRunReport(): ?TransportReport
+    {
+        $value = $this->report;
+        if (is_string($value)) {
+            $value = Json::decodeIfJson($value);
+        }
+
+        return is_array($value) && $value ? TransportReport::fromStorageArray($value) : null;
     }
 
     public function getUser(): ActiveQueryInterface

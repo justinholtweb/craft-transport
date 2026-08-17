@@ -69,6 +69,43 @@ class AssetHandler extends BaseElementHandler
         return $asset;
     }
 
+    /**
+     * An asset is identified by its filename inside its folder — the same identity the
+     * filesystem enforces, and what would otherwise be uploaded a second time as
+     * "file-1.jpg".
+     */
+    public function matchExisting(array $data, ?int $siteId = null): ?ElementInterface
+    {
+        $attributes = $data['attributes'] ?? [];
+        $filename = $attributes['filename'] ?? null;
+
+        $volume = isset($attributes['volume'])
+            ? Craft::$app->getVolumes()->getVolumeByHandle($attributes['volume'])
+            : null;
+
+        if (!$filename || !$volume) {
+            return null;
+        }
+
+        $folder = Craft::$app->getAssets()->findFolder([
+            'volumeId' => $volume->id,
+            'path' => $attributes['folderPath'] ?? '',
+        ]);
+
+        if (!$folder) {
+            return null;
+        }
+
+        $query = Asset::find()
+            ->folderId($folder->id)
+            ->filename($filename)
+            ->kind('*')
+            ->status(null)
+            ->orderBy(['elements.id' => SORT_ASC]);
+
+        return $this->scopeToSite($query, $siteId)->one();
+    }
+
     public function applyAttributes(array $attributes, ElementInterface $element): void
     {
         /** @var Asset $element */

@@ -50,4 +50,26 @@ class TagHandler extends BaseElementHandler
 
         return $tag;
     }
+
+    /**
+     * A tag is identified by its slug within its group.
+     */
+    public function matchExisting(array $data, ?int $siteId = null): ?ElementInterface
+    {
+        $handle = $data['attributes']['group'] ?? null;
+        $group = $handle ? Craft::$app->getTags()->getTagGroupByHandle($handle) : null;
+        $slugs = $this->slugsFrom($data);
+
+        if (!$group || !$slugs) {
+            return null;
+        }
+
+        $query = Tag::find()
+            ->group($group->handle)
+            ->slug($slugs)
+            ->status(null)
+            ->orderBy(['elements.id' => SORT_ASC]);
+
+        return $this->scopeToSite($query, $siteId)->one();
+    }
 }

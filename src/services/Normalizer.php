@@ -5,6 +5,8 @@ namespace justinholtweb\transport\services;
 use Craft;
 use craft\base\ElementInterface;
 use craft\models\FieldLayout;
+use justinholtweb\transport\elements\ElementHandlerInterface;
+use justinholtweb\transport\helpers\IdentityHelper;
 use justinholtweb\transport\Plugin;
 use yii\base\Component;
 
@@ -27,9 +29,17 @@ class Normalizer extends Component
      * @param array $data Serialized element payload (multi-site format).
      * @param string $sourceSiteHandle Site key within $data['sites'] to apply.
      * @param array<string, string> $siteMap Optional source→target site handle mapping.
+     * @param int|null $elementId The element the caller has already identified for this
+     *                            payload. Passing it keeps every site of a multi-site
+     *                            element on that one element instead of re-matching (and
+     *                            possibly duplicating) it per site.
      */
-    public function normalizeElementForSite(array $data, string $sourceSiteHandle, array $siteMap = []): ?ElementInterface
-    {
+    public function normalizeElementForSite(
+        array $data,
+        string $sourceSiteHandle,
+        array $siteMap = [],
+        ?int $elementId = null,
+    ): ?ElementInterface {
         $type = $data['type'] ?? null;
         $uid = $data['uid'] ?? null;
         if (!$type || !$uid) {
@@ -49,7 +59,15 @@ class Normalizer extends Component
 
         $handler = Plugin::getInstance()->elementRegistry->getHandlerForType($type);
 
-        $element = $this->findElementInSite($uid, $type, $site->id);
+        if ($elementId !== null) {
+            // Already identified: use that element, or skip the site if it isn't part
+            // of it — never create a second copy behind the caller's back.
+            return $this->applyTo($this->findInSiteById($elementId, $type, $site->id), $data, $siteData, $handler);
+        }
+
+        // The UID this package carries, or whatever the handler recognises as the same
+        // content already living here under a different one.
+        $element = IdentityHelper::resolveImportTarget($data, $site->id);
         if ($element === null) {
             $element = $handler?->makeElement($data['attributes'] ?? []);
             if ($element === null) {
@@ -61,6 +79,22 @@ class Normalizer extends Component
                 $element->uid = $uid;
             }
             $element->siteId = $site->id;
+        }
+
+        return $this->applyTo($element, $data, $siteData, $handler);
+    }
+
+    /**
+     * Applies the payload's shared attributes and one site's content onto an element.
+     */
+    private function applyTo(
+        ?ElementInterface $element,
+        array $data,
+        array $siteData,
+        ?ElementHandlerInterface $handler,
+    ): ?ElementInterface {
+        if ($element === null) {
+            return null;
         }
 
         if (array_key_exists('enabled', $data)) {
@@ -152,14 +186,16 @@ class Normalizer extends Component
     }
 
     /**
-     * Finds an existing element for a UID within a given site (any status).
+     * Loads an already-identified element in one site, or null when it doesn't live
+     * there (a section or group that doesn't cover the site, or content Craft hasn't
+     * propagated to it).
      *
      * @param class-string<ElementInterface> $elementType
      */
-    private function findElementInSite(string $uid, string $elementType, int $siteId): ?ElementInterface
+    private function findInSiteById(int $id, string $elementType, int $siteId): ?ElementInterface
     {
         return $elementType::find()
-            ->uid($uid)
+            ->id($id)
             ->siteId($siteId)
             ->status(null)
             ->drafts(null)
@@ -167,3 +203,4 @@ class Normalizer extends Component
             ->one();
     }
 }
+

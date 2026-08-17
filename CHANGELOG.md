@@ -1,5 +1,59 @@
 # Release Notes for Transport
 
+## 5.1.0 — 2026-08-17
+
+> {note} Control panel exports and imports now run on Craft's queue, so make sure a queue
+> runner is active in each environment. Exports no longer download straight from the
+> Export screen — queue one and download the finished package from *Transport → History*.
+
+> {note} Imports now update content that already exists in the target under a different
+> UID rather than adding a second copy of it. Turn this off under *Settings → Match
+> existing content on import* if you rely on strict UID-only identity.
+
+### Added
+- Control panel exports and imports now run as queue jobs, so large runs can't hit a
+  request timeout. Queued exports are downloaded from *Transport → History* when they
+  finish; queued imports report back there too.
+- Optional completion emails: tick "email me when it finishes" on the export or import
+  screen to get the full report at your account's address. Extra recipients and the
+  default state of that option are configurable in the plugin settings.
+- Detailed run reports (`TransportReport`) covering every element added, updated, skipped
+  and failed — with the reason for each skip and failure, a per-element-type breakdown,
+  and run duration. Reports are stored on the history row, shown on the history detail
+  screen, printed by the console commands, and included in completion emails.
+- `--verbose` and `--quiet` options on `transport/export` and `transport/import`.
+- `Export::run()` and `Import::run()`, which accept a `ProgressInterface` and return a
+  `TransportReport`. `AfterExportEvent` and `AfterImportEvent` now carry that report.
+
+### Changed
+- Console exports and imports never queue: they run inline and stream live progress —
+  a progress bar per stage plus the closing report — so you can watch them work.
+- The import wizard's "run in the background" checkbox is gone; real imports always are.
+  Dry runs still run inline and report back immediately.
+- The export screen no longer streams the package straight back as a download, since the
+  export now runs on the queue.
+
+### Fixed
+- Content that already exists in the target under a different UID — a single created
+  independently in each environment, content seeded before Transport was installed — is
+  now recognised and **updated** instead of imported as a second copy. Previously such an
+  element was treated as new, which duplicated it or, where Craft couldn't generate a
+  unique URI for it (singles, and any section whose URI format has no `{slug}` token),
+  failed the whole import with "Could not generate a unique URI based on the URI format."
+  Matching uses each element type's natural key: a single's section, a slug within its
+  section or group, an asset's filename in its folder, a user's email, a product's slug
+  within its type, a variant's SKU. Turn it off under *Settings → Match existing content
+  on import* for strict UID-only identity.
+- Every site of a multi-site element now writes to the one element the import identified,
+  instead of being re-matched per site — which could create a duplicate when a site's
+  slug differed.
+- Pre-import snapshots resolve elements the same way the import does, so rolling back an
+  import that updated pre-existing content restores it rather than deleting it.
+- The import preview no longer shows "Add" for an element the import will actually
+  update; matched elements are flagged as such in the wizard.
+- Imports now report elements that matched no site in the target as skipped, with the
+  reason, instead of silently counting them.
+
 ## 5.0.3 — 2026-07-26
 
 ### Added

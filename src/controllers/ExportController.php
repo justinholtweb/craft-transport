@@ -4,9 +4,9 @@ namespace justinholtweb\transport\controllers;
 
 use Craft;
 use craft\web\Controller;
-use craft\web\Response;
 use justinholtweb\transport\models\ExportConfig;
 use justinholtweb\transport\Plugin;
+use justinholtweb\transport\queue\ExportJob;
 use yii\web\Response as YiiResponse;
 
 /**
@@ -25,6 +25,7 @@ class ExportController extends Controller
         return $this->renderTemplate('transport/export/index', [
             'sections' => Craft::$app->getEntries()->getAllSections(),
             'packageKeys' => $this->packageKeys(),
+            'settings' => Plugin::getInstance()->getSettings(),
         ]);
     }
 
@@ -42,7 +43,9 @@ class ExportController extends Controller
     }
 
     /**
-     * Runs an export and streams the resulting package as a download.
+     * Queues an export. Control panel exports always run in the background so a large
+     * site can't blow the request timeout — the finished package is downloaded from the
+     * History screen, and the user can ask to be emailed when it lands.
      */
     public function actionRun(): YiiResponse
     {
@@ -61,18 +64,30 @@ class ExportController extends Controller
             $config->packageKeys = ['entries'];
         }
 
+        // Credit (and notify) the user who started it — the queue worker has no session
+        // of its own.
+        $config->userId = Craft::$app->getUser()->getId();
+
         if (!$config->validate()) {
             Craft::$app->getSession()->setError(Craft::t('transport', 'Couldn’t start export.'));
             return $this->renderTemplate('transport/export/index', [
                 'sections' => Craft::$app->getEntries()->getAllSections(),
+                'packageKeys' => $this->packageKeys(),
+                'settings' => Plugin::getInstance()->getSettings(),
                 'config' => $config,
             ]);
         }
 
-        $path = Plugin::getInstance()->export->export($config);
+        Craft::$app->getQueue()->push(new ExportJob([
+            'config' => $config->toArray(),
+            'notify' => (bool)$request->getBodyParam('notify'),
+        ]));
 
-        /** @var Response $response */
-        $response = Craft::$app->getResponse();
-        return $response->sendFile($path, basename($path), ['mimeType' => 'application/zip']);
+        Craft::$app->getSession()->setNotice(Craft::t(
+            'transport',
+            'Export queued. The package will be available to download from History when it finishes.'
+        ));
+
+        return $this->redirect('transport/history');
     }
 }

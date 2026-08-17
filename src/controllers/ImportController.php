@@ -8,6 +8,7 @@ use craft\web\Controller;
 use craft\web\UploadedFile;
 use justinholtweb\transport\models\DiffResult;
 use justinholtweb\transport\Plugin;
+use justinholtweb\transport\queue\ImportJob;
 use yii\web\BadRequestHttpException;
 use yii\web\Response as YiiResponse;
 
@@ -75,11 +76,16 @@ class ImportController extends Controller
             'token' => $token,
             'selectedUids' => $selectedUids,
             'diffs' => array_values($diffs),
+            'settings' => Plugin::getInstance()->getSettings(),
         ]);
     }
 
     /**
      * Step 4 — apply selections + merge decisions and run the import.
+     *
+     * Real imports always go to the queue, so a large package can't hit the request
+     * timeout half-way through. Dry runs stay inline: they change nothing and their
+     * whole point is showing the result on the next screen.
      */
     public function actionRun(): YiiResponse
     {
@@ -118,24 +124,30 @@ class ImportController extends Controller
         $importOptions = [
             'selectedUids' => $selectedUids ?: null,
             'decisions' => $decisions,
+            // The queue worker has no session, so credit (and notify) the user here.
+            'userId' => Craft::$app->getUser()->getId(),
         ];
 
-        // Run large imports in the background when requested.
-        if ($request->getBodyParam('queue') && !$dryRun) {
-            Craft::$app->getQueue()->push(new \justinholtweb\transport\queue\ImportJob([
+        if (!$dryRun) {
+            Craft::$app->getQueue()->push(new ImportJob([
                 'path' => $path,
                 'dryRun' => false,
                 'options' => $importOptions,
+                'notify' => (bool)$request->getBodyParam('notify'),
             ]));
-            Craft::$app->getSession()->setNotice(Craft::t('transport', 'Import queued.'));
+
+            Craft::$app->getSession()->setNotice(Craft::t(
+                'transport',
+                'Import queued. Its report will appear in History when it finishes.'
+            ));
+
             return $this->redirect('transport/history');
         }
 
-        $result = Plugin::getInstance()->import->importPackage($path, $dryRun, [], $importOptions);
+        $report = Plugin::getInstance()->import->run($path, true, [], $importOptions);
 
         return $this->renderTemplate('transport/import/run', [
-            'result' => $result,
-            'dryRun' => $dryRun,
+            'report' => $report,
         ]);
     }
 

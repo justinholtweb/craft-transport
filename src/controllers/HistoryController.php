@@ -25,6 +25,7 @@ class HistoryController extends Controller
         return $this->renderTemplate('transport/history/index', [
             'history' => $history,
             'canRollback' => Craft::$app->getUser()->checkPermission(Plugin::PERMISSION_ROLLBACK),
+            'canDownload' => Craft::$app->getUser()->checkPermission(Plugin::PERMISSION_EXPORT),
         ]);
     }
 
@@ -39,9 +40,57 @@ class HistoryController extends Controller
 
         return $this->renderTemplate('transport/history/detail', [
             'record' => $record,
+            'report' => $record->getRunReport(),
             'errors' => is_array($errors) ? $errors : [$record->errorLog],
             'canRollback' => Craft::$app->getUser()->checkPermission(Plugin::PERMISSION_ROLLBACK),
+            'canDownload' => Craft::$app->getUser()->checkPermission(Plugin::PERMISSION_EXPORT),
+            'packageAvailable' => $this->packagePath($record) !== null,
         ]);
+    }
+
+    /**
+     * Streams the package a queued export produced. Control panel exports run in the
+     * background, so this is how the finished package gets to the user.
+     */
+    public function actionDownload(int $id): YiiResponse
+    {
+        $this->requirePermission(Plugin::PERMISSION_EXPORT);
+
+        $record = ImportHistory::findOne(['id' => $id]);
+        if (!$record || $record->direction !== ImportHistory::DIRECTION_EXPORT) {
+            throw new NotFoundHttpException();
+        }
+
+        $path = $this->packagePath($record);
+        if ($path === null) {
+            Craft::$app->getSession()->setError(Craft::t(
+                'transport',
+                'That package is no longer on disk.'
+            ));
+            return $this->redirect('transport/history');
+        }
+
+        return Craft::$app->getResponse()->sendFile($path, basename($path), [
+            'mimeType' => 'application/zip',
+        ]);
+    }
+
+    /**
+     * The package this history row refers to, if it is still staged in the temp
+     * directory. The filename is taken apart with basename() so a crafted record can't
+     * point outside it.
+     */
+    private function packagePath(ImportHistory $record): ?string
+    {
+        if ($record->direction !== ImportHistory::DIRECTION_EXPORT || !$record->packageName) {
+            return null;
+        }
+
+        $path = Plugin::getInstance()->getSettings()->getResolvedTempPath()
+            . DIRECTORY_SEPARATOR
+            . basename($record->packageName);
+
+        return is_file($path) ? $path : null;
     }
 
     public function actionRollback(): YiiResponse

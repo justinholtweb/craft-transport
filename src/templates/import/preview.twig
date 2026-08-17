@@ -66,15 +66,20 @@
             <div class="input">
                 <label>
                     <input type="checkbox" name="dryRun" value="1">
-                    {{ "Dry run (simulate without saving)"|t('transport') }}
+                    {{ "Dry run (simulate without saving, results shown immediately)"|t('transport') }}
                 </label>
                 <br>
                 <label>
-                    <input type="checkbox" name="queue" value="1">
-                    {{ "Run in the background (recommended for large imports)"|t('transport') }}
+                    <input type="checkbox" name="notify" value="1"
+                        {{ (settings.notifyOnCompletion ?? true) ? 'checked' }}>
+                    {{ "Email me the report when the import finishes"|t('transport') }}
                 </label>
             </div>
         </div>
+
+        <p class="light">
+            {{ "Imports run in the background so they can’t time out. Their report appears on the History screen when they finish."|t('transport') }}
+        </p>
 
         <div class="buttons">
             <button type="submit" class="btn submit">{{ "Run import"|t('transport') }}</button>

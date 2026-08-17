@@ -56,6 +56,28 @@ class CategoryHandler extends BaseElementHandler
         return $category;
     }
 
+    /**
+     * A category is identified by its slug within its group.
+     */
+    public function matchExisting(array $data, ?int $siteId = null): ?ElementInterface
+    {
+        $handle = $data['attributes']['group'] ?? null;
+        $group = $handle ? Craft::$app->getCategories()->getGroupByHandle($handle) : null;
+        $slugs = $this->slugsFrom($data);
+
+        if (!$group || !$slugs) {
+            return null;
+        }
+
+        $query = Category::find()
+            ->group($group->handle)
+            ->slug($slugs)
+            ->status(null)
+            ->orderBy(['elements.id' => SORT_ASC]);
+
+        return $this->scopeToSite($query, $siteId)->one();
+    }
+
     public function applyAttributes(array $attributes, ElementInterface $element): void
     {
         /** @var Category $element */

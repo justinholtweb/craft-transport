@@ -180,6 +180,67 @@ abstract class TransportTestCase extends TestCase
     }
 
     /**
+     * A single section whose URI format has no {slug} token — so Craft cannot make a
+     * second entry's URI unique, exactly as production singles behave.
+     */
+    protected function singleSection(string $handle = 'transportHome', string $uriFormat = 'transport-home'): Section
+    {
+        $entries = Craft::$app->getEntries();
+        $existing = $entries->getSectionByHandle($handle);
+        if ($existing) {
+            return $existing;
+        }
+
+        $entryType = new EntryType();
+        $entryType->name = 'Transport Home';
+        $entryType->handle = $handle . 'Type';
+
+        if (!$entries->saveEntryType($entryType)) {
+            self::fail("Couldn't save single entry type: " . implode('; ', $entryType->getFirstErrors()));
+        }
+
+        $section = new Section();
+        $section->name = 'Transport Home';
+        $section->handle = $handle;
+        $section->type = Section::TYPE_SINGLE;
+        $section->propagationMethod = PropagationMethod::All;
+
+        $siteSettings = [];
+        foreach (Craft::$app->getSites()->getAllSites() as $site) {
+            $siteSettings[] = new Section_SiteSettings([
+                'siteId' => $site->id,
+                'hasUrls' => true,
+                'uriFormat' => $uriFormat,
+                'template' => 'index',
+                'enabledByDefault' => true,
+            ]);
+        }
+        $section->setSiteSettings($siteSettings);
+        $section->setEntryTypes([$entryType]);
+
+        if (!$entries->saveSection($section)) {
+            self::fail("Couldn't save single section: " . implode('; ', $section->getFirstErrors()));
+        }
+
+        return $entries->getSectionByHandle($handle);
+    }
+
+    /**
+     * Rewrites an element's UID in place, standing in for the same content having been
+     * created independently in another environment.
+     */
+    protected function reassignUid(\craft\base\ElementInterface $element): string
+    {
+        $uid = \craft\helpers\StringHelper::UUID();
+
+        Craft::$app->getDb()->createCommand()
+            ->update('{{%elements}}', ['uid' => $uid], ['id' => $element->id])
+            ->execute();
+
+        return $uid;
+    }
+
+    /**
      * A local filesystem volume backed by a throwaway directory under tests/_output.
      */
     protected function volume(): Volume

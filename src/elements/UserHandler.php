@@ -65,6 +65,27 @@ class UserHandler extends BaseElementHandler
         return $user;
     }
 
+    /**
+     * A user is identified by their email address, falling back to their username.
+     */
+    public function matchExisting(array $data, ?int $siteId = null): ?ElementInterface
+    {
+        $attributes = $data['attributes'] ?? [];
+
+        foreach ([['email', $attributes['email'] ?? null], ['username', $attributes['username'] ?? null]] as [$param, $value]) {
+            if (!$value) {
+                continue;
+            }
+
+            $existing = User::find()->$param($value)->status(null)->one();
+            if ($existing) {
+                return $existing;
+            }
+        }
+
+        return null;
+    }
+
     public function applyAttributes(array $attributes, ElementInterface $element): void
     {
         /** @var User $element */

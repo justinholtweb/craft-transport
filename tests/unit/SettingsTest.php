@@ -20,6 +20,9 @@ class SettingsTest extends TestCase
         $this->assertSame(30, $settings->snapshotRetentionDays);
         $this->assertSame(20, $settings->snapshotRetentionCount);
         $this->assertSame('info', $settings->logLevel);
+        $this->assertTrue($settings->matchExistingElements);
+        $this->assertTrue($settings->notifyOnCompletion);
+        $this->assertSame('', $settings->notificationEmails);
     }
 
     public function testDefaultsValidate(): void

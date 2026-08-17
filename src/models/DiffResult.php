@@ -25,6 +25,13 @@ class DiffResult extends Model
     /** @var bool Whether a matching element already exists in the target. */
     public bool $exists = false;
 
+    /**
+     * @var bool Whether that match came from the element's natural key rather than its
+     *           UID — i.e. the same content already lives here under a different UID,
+     *           and importing will update it rather than add a second copy.
+     */
+    public bool $matchedByNaturalKey = false;
+
     /** @var DiffEntry[] */
     public array $entries = [];
 

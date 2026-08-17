@@ -3,6 +3,7 @@
 namespace justinholtweb\transport\events;
 
 use justinholtweb\transport\models\ExportConfig;
+use justinholtweb\transport\models\TransportReport;
 use yii\base\Event;
 
 /**
@@ -18,4 +19,7 @@ class AfterExportEvent extends Event
 
     /** @var array<string, array> Serialized elements, keyed by package key. */
     public array $elements = [];
+
+    /** @var TransportReport|null Detailed per-element outcome of the export. */
+    public ?TransportReport $report = null;
 }

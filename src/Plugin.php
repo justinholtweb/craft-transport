@@ -19,6 +19,7 @@ use justinholtweb\transport\services\FieldRegistry;
 use justinholtweb\transport\services\Import;
 use justinholtweb\transport\services\Merger;
 use justinholtweb\transport\services\Normalizer;
+use justinholtweb\transport\services\Notifier;
 use justinholtweb\transport\services\PackageManager;
 use justinholtweb\transport\services\Serializer;
 use justinholtweb\transport\services\Snapshotter;
@@ -39,6 +40,7 @@ use yii\base\Event;
  * @property-read Merger $merger
  * @property-read Snapshotter $snapshots
  * @property-read ValidationService $validation
+ * @property-read Notifier $notifier
  * @property-read FieldRegistry $fieldRegistry
  * @property-read ElementRegistry $elementRegistry
  * @property-read Settings $settings
@@ -51,7 +53,7 @@ class Plugin extends BasePlugin
     public const PERMISSION_IMPORT = 'transport:import';
     public const PERMISSION_ROLLBACK = 'transport:rollback';
 
-    public string $schemaVersion = '1.0.0';
+    public string $schemaVersion = '1.1.0';
     public bool $hasCpSection = true;
     public bool $hasCpSettings = true;
 
@@ -70,6 +72,7 @@ class Plugin extends BasePlugin
                 'merger' => Merger::class,
                 'snapshots' => Snapshotter::class,
                 'validation' => ValidationService::class,
+                'notifier' => Notifier::class,
                 'fieldRegistry' => FieldRegistry::class,
                 'elementRegistry' => ElementRegistry::class,
             ],
@@ -157,6 +160,7 @@ class Plugin extends BasePlugin
                 $event->rules['transport/import/run'] = 'transport/import/run';
                 $event->rules['transport/history'] = 'transport/history/index';
                 $event->rules['transport/history/<id:\d+>'] = 'transport/history/detail';
+                $event->rules['transport/history/<id:\d+>/download'] = 'transport/history/download';
                 $event->rules['transport/settings'] = 'transport/settings/index';
             }
         );

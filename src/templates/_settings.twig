@@ -52,6 +52,34 @@
     errors: settings.getErrors('snapshotRetentionCount'),
 }) }}
 
+{{ forms.lightswitchField({
+    label: "Match existing content on import"|t('transport'),
+    instructions: "When a package element's UID isn't found here, match the element that already exists by its natural key — a single by its section, a slug within its section or group, an asset's filename in its folder, a user's email — and update it instead of adding a duplicate. Turn off for strict UID-only identity."|t('transport'),
+    id: 'matchExistingElements',
+    name: 'matchExistingElements',
+    on: settings.matchExistingElements,
+    errors: settings.getErrors('matchExistingElements'),
+}) }}
+
+{{ forms.lightswitchField({
+    label: "Notify on completion by default"|t('transport'),
+    instructions: "Whether the “email me when it finishes” option starts switched on for exports and imports."|t('transport'),
+    id: 'notifyOnCompletion',
+    name: 'notifyOnCompletion',
+    on: settings.notifyOnCompletion,
+    errors: settings.getErrors('notifyOnCompletion'),
+}) }}
+
+{{ forms.autosuggestField({
+    label: "Additional notification emails"|t('transport'),
+    instructions: "Comma-separated addresses copied on every completion email, on top of the user who started the run."|t('transport'),
+    id: 'notificationEmails',
+    name: 'notificationEmails',
+    suggestEnvVars: true,
+    value: settings.notificationEmails,
+    errors: settings.getErrors('notificationEmails'),
+}) }}
+
 {{ forms.selectField({
     label: "Log level"|t('transport'),
     id: 'logLevel',

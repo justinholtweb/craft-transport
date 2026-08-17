@@ -121,6 +121,36 @@ if (class_exists(\some\plugin\fields\TheField::class)) {
 
 This is how Transport registers its own Commerce, Hyper, Neo, and Super Table handlers.
 
+## Matching content that already exists
+
+Transport identifies elements by UID. When a package element's UID isn't in the target,
+it asks the handler whether the element already exists here under a different UID, and
+updates that element instead of adding a second copy. Handlers extending
+`BaseElementHandler` opt in by overriding `matchExisting()`:
+
+```php
+use craft\base\ElementInterface;
+
+public function matchExisting(array $data, ?int $siteId = null): ?ElementInterface
+{
+    $sku = $data['attributes']['sku'] ?? null;
+    if (!$sku) {
+        return null;
+    }
+
+    return $this->scopeToSite(MyElement::find()->sku($sku)->status(null), $siteId)->one();
+}
+```
+
+Return the element only when the natural key genuinely identifies the same content —
+the key Craft (or your own code) would refuse to duplicate anyway. `$data` is the full
+serialized payload, `$siteId` restricts the lookup to one site (null means any), and
+`scopeToSite()` / `slugsFrom()` on the base class cover the common shapes.
+
+The fallback never applies to references between elements: a relation, author or parent
+resolves by UID or not at all. Users can disable it entirely with the *Match existing
+content on import* setting, so a handler must never depend on it running.
+
 ## Lifecycle events
 
 Hook into export and import runs to inspect, adjust, or cancel them, or to react after
@@ -129,9 +159,9 @@ they finish.
 | Event | Class | Cancel? |
 |---|---|---|
 | `Export::EVENT_BEFORE_EXPORT` | `BeforeExportEvent` (`config`) | yes (`$event->isValid = false`) |
-| `Export::EVENT_AFTER_EXPORT` | `AfterExportEvent` (`config`, `path`, `elements`) | — |
+| `Export::EVENT_AFTER_EXPORT` | `AfterExportEvent` (`config`, `path`, `elements`, `report`) | — |
 | `Import::EVENT_BEFORE_IMPORT` | `BeforeImportEvent` (`package`, `dryRun`) | yes (`$event->isValid = false`) |
-| `Import::EVENT_AFTER_IMPORT` | `AfterImportEvent` (`package`, `result`, `dryRun`) | — |
+| `Import::EVENT_AFTER_IMPORT` | `AfterImportEvent` (`package`, `result`, `report`, `dryRun`) | — |
 
 ```php
 use justinholtweb\transport\services\Import;
@@ -151,3 +181,34 @@ Event::on(
 
 Cancelling a before-event stops the run: a cancelled export returns an empty path; a
 cancelled import returns a result with `status` of `cancelled`.
+
+### Run reports
+
+Both after-events also carry a `report` — a `TransportReport` describing what actually
+happened, element by element:
+
+```php
+use justinholtweb\transport\models\TransportReport;
+
+$report->countOf(TransportReport::ACTION_CREATED);   // totals per outcome
+$report->getCountsByKey();                           // the same, broken down by type
+$report->itemsFor(TransportReport::ACTION_SKIPPED);  // rows: title, key, type, uid, detail
+$report->errors;                                     // run-level failures
+$report->summary();                                  // "created 12, updated 3, skipped 1, failed 0"
+```
+
+The same report is stored on the history row (`ImportHistory::getRunReport()`), printed
+by the console commands, and emailed to whoever started a queued run. Per-element rows
+are capped at `TransportReport::MAX_ITEMS`; the totals are always exact.
+
+### Progress reporting
+
+Long runs report progress through `ProgressInterface`. Pass your own implementation to
+`Export::run()` or `Import::run()` to drive a different display:
+
+```php
+$report = Plugin::getInstance()->import->run($path, false, [], [], $myProgressReporter);
+```
+
+Transport ships `ConsoleProgress` (used by the CLI), `QueueProgress` (used by the queue
+jobs) and `NullProgress`.

@@ -50,4 +50,15 @@ class GlobalSetHandler extends BaseElementHandler
 
         return Craft::$app->getGlobals()->getSetByHandle($handle);
     }
+
+    /**
+     * Global sets are always matched by handle — they're defined in project config, so
+     * their UIDs differ between environments as a matter of course.
+     */
+    public function matchExisting(array $data, ?int $siteId = null): ?ElementInterface
+    {
+        $handle = $data['attributes']['handle'] ?? null;
+
+        return $handle ? Craft::$app->getGlobals()->getSetByHandle($handle) : null;
+    }
 }

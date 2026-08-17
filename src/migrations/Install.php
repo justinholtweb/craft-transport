@@ -22,6 +22,7 @@ class Install extends Migration
                     ->notNull()
                     ->defaultValue('pending'),
                 'elementCounts' => $this->json(),
+                'report' => $this->longText(),
                 'errorLog' => $this->text(),
                 'snapshotId' => $this->integer(),
                 'userId' => $this->integer(),

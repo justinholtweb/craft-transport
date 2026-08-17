@@ -21,10 +21,16 @@ use yii\base\Component;
 class Snapshotter extends Component
 {
     /**
-     * Captures the current state of the given elements (by uid/type) so it can be
-     * restored later. Reads the live DB, so call before any mutation.
+     * Captures the current state of the given elements so it can be restored later.
+     * Reads the live DB, so call before any mutation.
      *
-     * @param array<int, array{uid:string,type:string}> $refs
+     * Elements are resolved exactly the way the import will resolve them — including a
+     * handler's natural-key match — so an element the import is about to adopt is
+     * snapshotted as an update to restore, not as something to delete on rollback. The
+     * entry records the resolved element's own UID for the same reason.
+     *
+     * @param array<int, array{uid:string,type:string}> $refs Serialized elements, or at
+     *        minimum their uid and type.
      * @return array<int, array> Snapshot entries.
      */
     public function capture(array $refs): array
@@ -39,9 +45,9 @@ class Snapshotter extends Component
                 continue;
             }
 
-            $existing = IdentityHelper::resolveElement($uid, $type);
+            $existing = IdentityHelper::resolveImportTarget($ref);
             $entries[] = $existing
-                ? ['uid' => $uid, 'type' => $type, 'existed' => true, 'data' => $serializer->serializeElement($existing)]
+                ? ['uid' => $existing->uid, 'type' => $type, 'existed' => true, 'data' => $serializer->serializeElement($existing)]
                 : ['uid' => $uid, 'type' => $type, 'existed' => false];
         }
 

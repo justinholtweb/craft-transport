@@ -7,8 +7,12 @@ use craft\base\ElementInterface;
 use justinholtweb\transport\events\AfterExportEvent;
 use justinholtweb\transport\events\BeforeExportEvent;
 use justinholtweb\transport\models\ExportConfig;
+use justinholtweb\transport\models\TransportReport;
 use justinholtweb\transport\Plugin;
+use justinholtweb\transport\progress\NullProgress;
+use justinholtweb\transport\progress\ProgressInterface;
 use justinholtweb\transport\records\ImportHistory;
+use Throwable;
 use yii\base\Component;
 
 /**
@@ -24,49 +28,114 @@ class Export extends Component
     public const EVENT_AFTER_EXPORT = 'afterExport';
 
     /**
+     * Stage labels reported through {@see ProgressInterface}. Queue jobs map these onto
+     * slices of their progress bar, so keep them in sync with
+     * {@see \justinholtweb\transport\queue\ExportJob::stages()}.
+     */
+    public const STAGE_GATHER = 'Gathering elements';
+    public const STAGE_SERIALIZE = 'Serializing elements';
+    public const STAGE_FILES = 'Bundling asset files';
+    public const STAGE_WRITE = 'Writing package';
+
+    /**
      * Runs an export and returns the absolute path to the written package (empty string
      * if a {@see self::EVENT_BEFORE_EXPORT} listener cancels it).
      */
     public function export(ExportConfig $config): string
     {
+        return $this->run($config)->packagePath ?? '';
+    }
+
+    /**
+     * Runs an export, reporting progress as it goes, and returns a detailed report of
+     * what was exported, skipped and failed.
+     */
+    public function run(ExportConfig $config, ?ProgressInterface $progress = null): TransportReport
+    {
         $plugin = Plugin::getInstance();
         $serializer = $plugin->serializer;
+        $progress ??= new NullProgress();
+
+        $report = new TransportReport();
+        $report->direction = ImportHistory::DIRECTION_EXPORT;
+        $report->userId = $config->userId ?? $this->currentUserId();
+        $report->begin();
 
         $beforeEvent = new BeforeExportEvent(['config' => $config]);
         $this->trigger(self::EVENT_BEFORE_EXPORT, $beforeEvent);
         if (!$beforeEvent->isValid) {
-            return '';
+            $progress->note('Export cancelled by a beforeExport listener.');
+            $report->end(TransportReport::STATUS_CANCELLED);
+            return $report;
         }
 
+        $progress->start(self::STAGE_GATHER);
         $elements = $this->gatherElements($config);
+        $progress->finish(sprintf('Gathered %d element(s).', count($elements)));
 
         // Resolve a dependency-safe import order across the whole set.
         $resolution = $plugin->dependencies->resolve($elements);
-
-        $grouped = [];
-        foreach ($elements as $element) {
-            $data = $serializer->serializeElement($element);
-            $grouped[$data['key']][] = $data;
+        if ($resolution['cycles']) {
+            $progress->note(sprintf('%d dependency cycle(s) detected — order may need review.', count($resolution['cycles'])));
         }
 
-        $files = $config->includeAssetFiles
-            ? $plugin->assets->filesForElements($elements)
-            : [];
+        $progress->start(self::STAGE_SERIALIZE, count($elements));
+        $grouped = [];
+        $exported = [];
 
+        foreach ($elements as $element) {
+            try {
+                $data = $serializer->serializeElement($element);
+            } catch (Throwable $e) {
+                $report->record(TransportReport::ACTION_FAILED, [
+                    'uid' => $element->uid,
+                    'type' => $element::class,
+                    'key' => $this->keyForElement($element),
+                    'sites' => ['' => ['title' => (string)$element->title]],
+                ], $e->getMessage());
+                $progress->advance(sprintf('%s — failed: %s', $element->title, $e->getMessage()));
+                continue;
+            }
+
+            $grouped[$data['key']][] = $data;
+            $exported[] = $element;
+            $report->record(TransportReport::ACTION_CREATED, $data);
+            $progress->advance(TransportReport::titleOf($data));
+        }
+
+        $progress->finish();
+
+        $progress->start(self::STAGE_FILES);
+        $files = $config->includeAssetFiles
+            ? $plugin->assets->filesForElements($exported)
+            : [];
+        $progress->finish(sprintf('%d asset file(s) bundled.', count($files)));
+
+        $progress->start(self::STAGE_WRITE);
         $path = $plugin->packages->write($grouped, $files, $config->packageName, [
             'importOrder' => $resolution['order'],
             'cycles' => $resolution['cycles'],
         ]);
 
-        $this->recordHistory($path, $grouped);
+        $report->packagePath = $path;
+        $report->packageName = basename($path);
+
+        // A package that was written is a usable export even if individual elements
+        // couldn't be serialized — those are reported as failures rather than sinking
+        // the whole run.
+        $report->end($grouped ? TransportReport::STATUS_COMPLETED : TransportReport::STATUS_FAILED);
+        $progress->finish(sprintf('Wrote %s', $path));
+
+        $this->recordHistory($report, $grouped);
 
         $this->trigger(self::EVENT_AFTER_EXPORT, new AfterExportEvent([
             'config' => $config,
             'path' => $path,
             'elements' => $grouped,
+            'report' => $report,
         ]));
 
-        return $path;
+        return $report;
     }
 
     /**
@@ -107,7 +176,18 @@ class Export extends Component
         return $elements;
     }
 
-    private function recordHistory(string $path, array $grouped): void
+    private function keyForElement(ElementInterface $element): string
+    {
+        return Plugin::getInstance()->elementRegistry
+            ->getHandlerForType($element::class)?->packageKey() ?? 'elements';
+    }
+
+    /**
+     * Writes the export's history row and links the report to it.
+     *
+     * @param array<string, array> $grouped
+     */
+    private function recordHistory(TransportReport $report, array $grouped): void
     {
         $counts = [];
         foreach ($grouped as $key => $elements) {
@@ -115,11 +195,25 @@ class Export extends Component
         }
 
         $record = new ImportHistory();
-        $record->packageName = basename($path);
+        $record->packageName = $report->packageName;
         $record->direction = ImportHistory::DIRECTION_EXPORT;
-        $record->status = ImportHistory::STATUS_COMPLETED;
+        $record->status = $report->isSuccessful()
+            ? ImportHistory::STATUS_COMPLETED
+            : ImportHistory::STATUS_FAILED;
         $record->elementCounts = $counts;
-        $record->userId = Craft::$app->getUser()->getId();
-        $record->save();
+        $record->userId = $report->userId;
+        $record->setRunReport($report);
+        $record->save(false);
+
+        $report->historyId = $record->id;
+    }
+
+    /**
+     * The logged-in user, when there is one — queue workers and console runs have none,
+     * so those pass the initiating user explicitly on the {@see ExportConfig}.
+     */
+    private function currentUserId(): ?int
+    {
+        return Craft::$app->getUser()->getId();
     }
 }

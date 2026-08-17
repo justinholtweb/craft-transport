@@ -35,6 +35,11 @@
                             {% for key, count in counts %}{{ key }}: {{ count }}{% if not loop.last %}, {% endif %}{% endfor %}
                         </td>
                         <td class="thin">
+                            {% if canDownload and row.direction == 'export' and row.status == 'completed' %}
+                                <a href="{{ url('transport/history/' ~ row.id ~ '/download') }}" class="btn small">
+                                    {{ "Download"|t('transport') }}
+                                </a>
+                            {% endif %}
                             {% if canRollback and row.direction == 'import' and row.snapshotId and row.status == 'completed' %}
                                 <form method="post" style="margin:0;">
                                     {{ csrfInput() }}

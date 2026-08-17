@@ -7,6 +7,7 @@ use craft\base\ElementInterface;
 use craft\elements\db\ElementQueryInterface;
 use craft\elements\Entry;
 use craft\helpers\DateTimeHelper;
+use craft\models\Section;
 use justinholtweb\transport\helpers\IdentityHelper;
 
 /**
@@ -81,6 +82,42 @@ class EntryHandler extends BaseElementHandler
         $entry->typeId = $entryType->id;
 
         return $entry;
+    }
+
+    /**
+     * Matches an entry that already exists here under a different UID.
+     *
+     * A single's section holds exactly one entry, so the section alone identifies it.
+     * Everywhere else an entry is identified by its slug within its section — the same
+     * identity Craft itself enforces through the URI it generates, and the one that
+     * makes a second copy impossible to save.
+     */
+    public function matchExisting(array $data, ?int $siteId = null): ?ElementInterface
+    {
+        $handle = $data['attributes']['section'] ?? null;
+        $section = $handle ? Craft::$app->getEntries()->getSectionByHandle($handle) : null;
+
+        if (!$section) {
+            return null;
+        }
+
+        $query = Entry::find()
+            ->section($section->handle)
+            ->status(null)
+            ->drafts(false)
+            ->revisions(false)
+            // Oldest first, so a repeat import keeps landing on the same entry.
+            ->orderBy(['elements.id' => SORT_ASC]);
+
+        $this->scopeToSite($query, $siteId);
+
+        if ($section->type === Section::TYPE_SINGLE) {
+            return $query->one();
+        }
+
+        $slugs = $this->slugsFrom($data);
+
+        return $slugs ? $query->slug($slugs)->one() : null;
     }
 
     public function applyAttributes(array $attributes, ElementInterface $element): void

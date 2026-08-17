@@ -1,0 +1,102 @@
+{# Renders a TransportReport: totals, per-type breakdown, and the elements behind each
+   outcome. Shared by the history detail screen and the dry-run results screen. #}
+
+{% set isExport = report.direction == 'export' %}
+{% set detailLimit = detailLimit ?? 100 %}
+{% set labels = {
+    created: isExport ? "Exported"|t('transport') : "Added"|t('transport'),
+    updated: "Updated"|t('transport'),
+    skipped: "Skipped"|t('transport'),
+    failed: "Failed"|t('transport'),
+} %}
+{% set colors = { created: 'green', updated: 'orange', skipped: 'light', failed: 'red' } %}
+
+<div class="pane" style="margin-bottom:24px;">
+    <div style="display:flex;gap:40px;flex-wrap:wrap;">
+        {% for action, label in labels %}
+            <div>
+                <div style="font-size:26px;font-weight:bold;line-height:1.2;">{{ report.countOf(action) }}</div>
+                <div class="light">{{ label }}</div>
+            </div>
+        {% endfor %}
+        <div>
+            <div style="font-size:26px;font-weight:bold;line-height:1.2;">{{ "%.1fs"|format(report.duration) }}</div>
+            <div class="light">{{ "Duration"|t('transport') }}</div>
+        </div>
+    </div>
+
+    {% if report.dryRun %}
+        <p style="margin:12px 0 0;"><strong>{{ "Dry run"|t('transport') }}</strong> — {{ "no changes were saved."|t('transport') }}</p>
+    {% endif %}
+</div>
+
+{% if report.countsByKey|length %}
+    <h2>{{ "By type"|t('transport') }}</h2>
+    <table class="data fullwidth" style="margin-bottom:24px;">
+        <thead>
+            <tr>
+                <th>{{ "Type"|t('transport') }}</th>
+                {% for action, label in labels %}<th class="thin">{{ label }}</th>{% endfor %}
+            </tr>
+        </thead>
+        <tbody>
+            {% for key, counts in report.countsByKey %}
+                <tr>
+                    <td style="text-transform:capitalize;">{{ key }}</td>
+                    {% for action, label in labels %}<td class="thin">{{ counts[action] ?? 0 }}</td>{% endfor %}
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+{% endif %}
+
+{% for action, label in labels %}
+    {% set items = report.itemsFor(action) %}
+    {% if items|length %}
+        <h2>
+            <span class="status {{ colors[action] }}"></span>
+            {{ label }} ({{ report.countOf(action) }})
+        </h2>
+        <table class="data fullwidth" style="margin-bottom:24px;">
+            <thead>
+                <tr>
+                    <th>{{ "Title"|t('transport') }}</th>
+                    <th class="thin">{{ "Type"|t('transport') }}</th>
+                    <th>{{ "Detail"|t('transport') }}</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in items|slice(0, detailLimit) %}
+                    <tr>
+                        <td>{{ item.title ?: item.uid }}</td>
+                        <td class="thin" style="text-transform:capitalize;">{{ item.key }}</td>
+                        <td class="light">{{ item.detail }}</td>
+                    </tr>
+                {% endfor %}
+                {% if items|length > detailLimit %}
+                    <tr>
+                        <td colspan="3" class="light">
+                            {{ "…and {n} more"|t('transport', { n: items|length - detailLimit }) }}
+                        </td>
+                    </tr>
+                {% endif %}
+            </tbody>
+        </table>
+    {% endif %}
+{% endfor %}
+
+{% if report.truncated %}
+    <p class="light">
+        {{ "Per-element detail was capped for this run; the totals above are complete."|t('transport') }}
+    </p>
+{% endif %}
+
+{% if report.errors|length %}
+    <h2>{{ "Errors"|t('transport') }}</h2>
+    <ul class="errors">
+        {% for error in report.errors %}<li>{{ error }}</li>{% endfor %}
+        {% if report.errorOverflow %}
+            <li>{{ "…and {n} more"|t('transport', { n: report.errorOverflow }) }}</li>
+        {% endif %}
+    </ul>
+{% endif %}

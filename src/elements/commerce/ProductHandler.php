@@ -62,6 +62,30 @@ class ProductHandler extends BaseElementHandler
         return $product;
     }
 
+    /**
+     * A product is identified by its slug within its product type.
+     */
+    public function matchExisting(array $data, ?int $siteId = null): ?ElementInterface
+    {
+        $handle = $data['attributes']['type'] ?? null;
+        $type = $handle
+            ? Commerce::getInstance()->getProductTypes()->getProductTypeByHandle($handle)
+            : null;
+        $slugs = $this->slugsFrom($data);
+
+        if (!$type || !$slugs) {
+            return null;
+        }
+
+        $query = Product::find()
+            ->type($type->handle)
+            ->slug($slugs)
+            ->status(null)
+            ->orderBy(['elements.id' => SORT_ASC]);
+
+        return $this->scopeToSite($query, $siteId)->one();
+    }
+
     public function applyAttributes(array $attributes, ElementInterface $element): void
     {
         /** @var Product $element */

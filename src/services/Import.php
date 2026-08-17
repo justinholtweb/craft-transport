@@ -3,12 +3,16 @@
 namespace justinholtweb\transport\services;
 
 use Craft;
+use craft\base\ElementInterface;
 use craft\elements\Asset;
 use justinholtweb\transport\events\AfterImportEvent;
 use justinholtweb\transport\events\BeforeImportEvent;
 use justinholtweb\transport\helpers\IdentityHelper;
 use justinholtweb\transport\models\TransportPackage;
+use justinholtweb\transport\models\TransportReport;
 use justinholtweb\transport\Plugin;
+use justinholtweb\transport\progress\NullProgress;
+use justinholtweb\transport\progress\ProgressInterface;
 use justinholtweb\transport\records\ImportHistory;
 use Throwable;
 use yii\base\Component;
@@ -17,8 +21,10 @@ use yii\base\Component;
  * Orchestrates the import flow.
  *
  * Elements are imported in the package's recorded dependency order, each across every
- * site it carries (primary first), wrapped in a transaction. Diff/preview and selective
- * merge (Phase 3) and snapshotting/rollback (Phase 4) build on top of this.
+ * site it carries (primary first), wrapped in a transaction. Every element's outcome —
+ * created, updated, skipped or failed — is collected into a {@see TransportReport} that
+ * is stored on the history row, printed by the console command, and emailed to whoever
+ * started a queued import.
  */
 class Import extends Component
 {
@@ -29,35 +35,80 @@ class Import extends Component
     public const EVENT_AFTER_IMPORT = 'afterImport';
 
     /**
+     * Stage labels reported through {@see ProgressInterface}. Queue jobs map these onto
+     * slices of their progress bar, so keep them in sync with
+     * {@see \justinholtweb\transport\queue\ImportJob::stages()}.
+     */
+    public const STAGE_READ = 'Reading package';
+    public const STAGE_SNAPSHOT = 'Capturing snapshot';
+    public const STAGE_IMPORT = 'Importing elements';
+    public const STAGE_FINISH = 'Finishing up';
+
+    /**
      * Imports a package from disk.
      *
      * @param string $path Absolute path to the package zip.
      * @param bool $dryRun When true, rolls back after simulating — reports what would change.
      * @param array<string, string> $siteMap Optional source→target site handle mapping.
-     * @param array $options Optional 'selectedUids' (string[]|null = all) and
-     *                       'decisions' (array<uid, string[] rejected paths>).
-     * @return array{status:string,created:int,updated:int,skipped:int,errors:string[]}
+     * @param array $options Optional 'selectedUids' (string[]|null = all),
+     *                       'decisions' (array<uid, string[] rejected paths>) and
+     *                       'userId' (who to credit in history).
+     * @return array{status:string,created:int,updated:int,skipped:int,failed:int,errors:string[]}
      */
     public function importPackage(string $path, bool $dryRun = false, array $siteMap = [], array $options = []): array
     {
+        return $this->run($path, $dryRun, $siteMap, $options)->toLegacyResult();
+    }
+
+    /**
+     * Imports a package from disk, reporting progress as it goes, and returns a detailed
+     * report of every element created, updated, skipped and failed.
+     */
+    public function run(
+        string $path,
+        bool $dryRun = false,
+        array $siteMap = [],
+        array $options = [],
+        ?ProgressInterface $progress = null,
+    ): TransportReport {
         $plugin = Plugin::getInstance();
+        $progress ??= new NullProgress();
+
+        $report = new TransportReport();
+        $report->direction = ImportHistory::DIRECTION_IMPORT;
+        $report->dryRun = $dryRun;
+        $report->packageName = basename($path);
+        $report->packagePath = $path;
+        $report->userId = $options['userId'] ?? $this->currentUserId();
+        $report->begin();
+
+        $progress->start(self::STAGE_READ);
         $package = $plugin->packages->open($path);
 
         $validationErrors = $plugin->packages->validate($package);
         if ($validationErrors) {
-            return [
-                'status' => 'failed',
-                'created' => 0,
-                'updated' => 0,
-                'skipped' => 0,
-                'errors' => $validationErrors,
-            ];
+            foreach ($validationErrors as $error) {
+                $report->recordError($error);
+            }
+            $progress->finish('Package failed validation.');
+            $report->end(TransportReport::STATUS_FAILED);
+
+            // A queued import that never got started still has to be accounted for, or
+            // it would vanish without trace from the History screen.
+            if (!$dryRun) {
+                $history = $this->startHistory($report);
+                $this->finishHistory($history, $report, null);
+            }
+
+            return $report;
         }
 
         $beforeEvent = new BeforeImportEvent(['package' => $package, 'dryRun' => $dryRun]);
         $this->trigger(self::EVENT_BEFORE_IMPORT, $beforeEvent);
         if (!$beforeEvent->isValid) {
-            return ['status' => 'cancelled', 'created' => 0, 'updated' => 0, 'skipped' => 0, 'errors' => []];
+            $progress->finish('Import cancelled by a beforeImport listener.');
+            $report->end(TransportReport::STATUS_CANCELLED);
+            return $report;
         }
 
         $selectedUids = $options['selectedUids'] ?? null;
@@ -71,33 +122,33 @@ class Import extends Component
             }
         }
 
-        $result = ['created' => 0, 'updated' => 0, 'skipped' => 0, 'errors' => []];
+        $progress->finish(sprintf('%d element(s) selected for import.', count($toImport)));
 
         // Record real (non-dry-run) imports in history up front so failures are visible.
-        $history = null;
-        if (!$dryRun) {
-            $history = new ImportHistory();
-            $history->packageName = $package->path ? basename($package->path) : 'package.zip';
-            $history->direction = ImportHistory::DIRECTION_IMPORT;
-            $history->status = ImportHistory::STATUS_RUNNING;
-            $history->userId = Craft::$app->getUser()->getId();
-            $history->save(false);
-        }
+        $history = $dryRun ? null : $this->startHistory($report);
 
         $transaction = Craft::$app->getDb()->beginTransaction();
         $snapshot = null;
 
         try {
             // Capture prior state before mutating anything, so we can roll back.
-            $snapshotEntries = $dryRun ? [] : $plugin->snapshots->capture(
-                array_map(static fn($d) => ['uid' => $d['uid'] ?? '', 'type' => $d['type'] ?? ''], $toImport)
-            );
+            $progress->start(self::STAGE_SNAPSHOT);
+            // Pass the full payloads, not just uid/type: the snapshotter resolves them
+            // the same way the import will, and a natural-key match needs the attributes.
+            $snapshotEntries = $dryRun ? [] : $plugin->snapshots->capture($toImport);
+            $progress->finish($dryRun ? 'Dry run — no snapshot taken.' : sprintf('%d element(s) snapshotted.', count($snapshotEntries)));
+
+            $progress->start(self::STAGE_IMPORT, count($toImport));
 
             foreach ($toImport as $data) {
-                $this->importElement($package, $data, $siteMap, $result, $decisions[$data['uid'] ?? ''] ?? []);
+                $this->importElement($package, $data, $siteMap, $report, $decisions[$data['uid'] ?? ''] ?? []);
+                $progress->advance(sprintf('%s (%s)', TransportReport::titleOf($data), $data['key'] ?? 'element'));
             }
 
-            if ($dryRun || $result['errors']) {
+            $progress->finish();
+            $progress->start(self::STAGE_FINISH);
+
+            if ($dryRun || $report->errors) {
                 $transaction->rollBack();
             } else {
                 $snapshot = $plugin->snapshots->save($history->id, $snapshotEntries);
@@ -105,55 +156,90 @@ class Import extends Component
             }
         } catch (Throwable $e) {
             $transaction->rollBack();
-            $result['errors'][] = $e->getMessage();
+            $report->recordError($e->getMessage());
         }
 
-        $result['status'] = $result['errors'] ? 'failed' : ($dryRun ? 'dry-run' : 'completed');
+        $report->end();
+        $progress->finish($report->summary());
 
         Craft::info(sprintf(
-            'Import %s [%s]: created=%d updated=%d skipped=%d errors=%d',
-            $package->path ? basename($package->path) : 'package',
-            $result['status'],
-            $result['created'],
-            $result['updated'],
-            $result['skipped'],
-            count($result['errors'])
+            'Import %s [%s]: %s, errors=%d, %.2fs',
+            $report->packageName,
+            $report->status,
+            $report->summary(),
+            count($report->errors),
+            $report->duration
         ), 'transport');
 
         if ($history !== null) {
-            $history->status = $result['errors'] ? ImportHistory::STATUS_FAILED : ImportHistory::STATUS_COMPLETED;
-            $history->elementCounts = [
-                'created' => $result['created'],
-                'updated' => $result['updated'],
-                'skipped' => $result['skipped'],
-            ];
-            $history->errorLog = $result['errors'] ? json_encode($result['errors']) : null;
-            $history->snapshotId = $snapshot?->id;
-            $history->save(false);
+            $this->finishHistory($history, $report, $snapshot?->id);
         }
 
         $this->trigger(self::EVENT_AFTER_IMPORT, new AfterImportEvent([
             'package' => $package,
-            'result' => $result,
+            'result' => $report->toLegacyResult(),
+            'report' => $report,
             'dryRun' => $dryRun,
         ]));
 
-        return $result;
+        return $report;
     }
 
     /**
-     * Imports one element across all of its sites, updating $result counters.
+     * Opens the import's history row in the `running` state, so a job that dies mid-way
+     * is still visible on the History screen.
+     */
+    private function startHistory(TransportReport $report): ImportHistory
+    {
+        $history = new ImportHistory();
+        $history->packageName = $report->packageName ?: 'package.zip';
+        $history->direction = ImportHistory::DIRECTION_IMPORT;
+        $history->status = ImportHistory::STATUS_RUNNING;
+        $history->userId = $report->userId;
+        $history->save(false);
+
+        $report->historyId = $history->id;
+
+        return $history;
+    }
+
+    /**
+     * Settles the history row with the finished report.
+     */
+    private function finishHistory(ImportHistory $history, TransportReport $report, ?int $snapshotId): void
+    {
+        $history->status = $report->errors ? ImportHistory::STATUS_FAILED : ImportHistory::STATUS_COMPLETED;
+        $history->elementCounts = $report->getCounts();
+        $history->errorLog = $report->errors ? json_encode($report->errors) : null;
+        $history->snapshotId = $snapshotId;
+        $history->setRunReport($report);
+        $history->save(false);
+    }
+
+    /**
+     * Imports one element across all of its sites, recording its outcome on the report.
      *
      * @param string[] $rejectedPaths Field paths to keep at the target's current value.
      */
-    private function importElement(TransportPackage $package, array $data, array $siteMap, array &$result, array $rejectedPaths = []): void
-    {
+    private function importElement(
+        TransportPackage $package,
+        array $data,
+        array $siteMap,
+        TransportReport $report,
+        array $rejectedPaths = [],
+    ): void {
         $plugin = Plugin::getInstance();
         $elementsService = Craft::$app->getElements();
         IdentityHelper::flush();
 
-        $existing = IdentityHelper::resolveElement($data['uid'] ?? '', $data['type'] ?? '');
+        // The element this payload belongs to here: the one carrying its UID, or the one
+        // its handler recognises as the same content under a different UID.
+        $existing = IdentityHelper::resolveImportTarget($data);
         $isUpdate = $existing !== null;
+        $adopted = IdentityHelper::isNaturalKeyMatch($data, $existing);
+
+        // Every site of a multi-site element writes to this one element.
+        $targetId = $existing?->id;
 
         // Apply field-level merge decisions before normalizing.
         if ($rejectedPaths) {
@@ -164,7 +250,7 @@ class Import extends Component
         $savedAny = false;
 
         foreach ($plugin->normalizer->orderedSiteHandles($data) as $sourceHandle) {
-            $element = $plugin->normalizer->normalizeElementForSite($data, $sourceHandle, $siteMap);
+            $element = $plugin->normalizer->normalizeElementForSite($data, $sourceHandle, $siteMap, $targetId);
             if ($element === null) {
                 continue;
             }
@@ -175,25 +261,58 @@ class Import extends Component
             }
 
             if (!$elementsService->saveElement($element)) {
-                $result['errors'][] = sprintf(
+                $detail = implode('; ', $element->getFirstErrors());
+                $message = sprintf(
                     '%s "%s" [%s]: %s',
                     $data['type'] ?? 'element',
                     $data['sites'][$sourceHandle]['title'] ?? ($data['uid'] ?? '?'),
                     $sourceHandle,
-                    implode('; ', $element->getFirstErrors())
+                    $detail
                 );
+
+                $report->record(TransportReport::ACTION_FAILED, $data, $message);
+                $report->recordError($message);
                 return;
             }
 
+            $targetId ??= $element->id;
             $savedAny = true;
         }
 
         if (!$savedAny) {
-            $result['skipped']++;
+            $report->record(
+                TransportReport::ACTION_SKIPPED,
+                $data,
+                'No site on this element could be mapped to a site in this environment.'
+            );
             return;
         }
 
-        $isUpdate ? $result['updated']++ : $result['created']++;
+        $report->record(
+            $isUpdate ? TransportReport::ACTION_UPDATED : TransportReport::ACTION_CREATED,
+            $data,
+            $adopted ? $this->adoptionNote($existing) : ''
+        );
+    }
+
+    /**
+     * Explains that an element already here — under a different UID — was updated
+     * rather than duplicated, so the report shows what the import adopted.
+     */
+    private function adoptionNote(ElementInterface $existing): string
+    {
+        Craft::info(sprintf(
+            'Matched existing %s #%d (uid %s) by its attributes; updating rather than creating a duplicate.',
+            $existing::class,
+            $existing->id,
+            $existing->uid
+        ), 'transport');
+
+        return sprintf(
+            'Matched the existing "%s" (#%d), which carries a different UID; updated it instead of creating a duplicate.',
+            $existing->getUiLabel(),
+            $existing->id
+        );
     }
 
     /**
@@ -225,5 +344,14 @@ class Import extends Component
         }
 
         return $ordered;
+    }
+
+    /**
+     * The logged-in user, when there is one — queue workers and console runs have none,
+     * so those pass the initiating user in the import options.
+     */
+    private function currentUserId(): ?int
+    {
+        return Craft::$app->getUser()->getId();
     }
 }

@@ -38,6 +38,31 @@ class Settings extends Model
     public int $snapshotRetentionCount = 20;
 
     /**
+     * @var bool Whether an import may match an element that already exists here under a
+     *           different UID — a single by its section, a slug within its section or
+     *           group, an asset's filename in its folder, a user's email — and update it
+     *           instead of trying to add a second copy.
+     *
+     *           Turn this off for strict UID-only identity, accepting that content which
+     *           exists in both environments under different UIDs will be duplicated, or
+     *           will fail to import where Craft can't generate a unique URI for it.
+     */
+    public bool $matchExistingElements = true;
+
+    /**
+     * @var bool Whether the "email me when this finishes" box is ticked by default on
+     *           the export and import screens.
+     */
+    public bool $notifyOnCompletion = true;
+
+    /**
+     * @var string Additional addresses to copy on every completion email, separated by
+     *             commas. Supports environment variables. The user who started the run
+     *             is always notified when they ask to be.
+     */
+    public string $notificationEmails = '';
+
+    /**
      * @var string Log verbosity. One of: error, warning, info, debug.
      */
     public string $logLevel = 'info';
@@ -55,7 +80,8 @@ class Settings extends Model
         return [
             [['tempPath', 'logLevel'], 'required'],
             [['maxPackageSize', 'snapshotRetentionDays', 'snapshotRetentionCount'], 'integer', 'min' => 0],
-            [['includeAssetFiles'], 'boolean'],
+            [['includeAssetFiles', 'notifyOnCompletion', 'matchExistingElements'], 'boolean'],
+            [['notificationEmails'], 'string'],
             [['logLevel'], 'in', 'range' => ['error', 'warning', 'info', 'debug']],
         ];
     }

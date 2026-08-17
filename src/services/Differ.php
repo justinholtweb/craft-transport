@@ -43,7 +43,10 @@ class Differ extends Component
             'title' => $this->primaryTitle($incoming),
         ]);
 
-        $existing = IdentityHelper::resolveElement($result->uid, $result->type);
+        // Resolve the same way the import will, so the preview can't promise an "add"
+        // that turns into an update (or a failure) when it runs.
+        $existing = IdentityHelper::resolveImportTarget($incoming);
+        $result->matchedByNaturalKey = IdentityHelper::isNaturalKeyMatch($incoming, $existing);
 
         if ($existing === null) {
             $result->exists = false;

@@ -1,6 +1,6 @@
 {% extends "_layouts/cp" %}
 
-{% set title = "Import ##{record.id}"|t('transport') %}
+{% set title = "#{record.direction|capitalize} ##{record.id}"|t('transport') %}
 {% set crumbs = [{ label: "History"|t('transport'), url: url('transport/history') }] %}
 
 {% block content %}
@@ -20,7 +20,18 @@
         </tbody>
     </table>
 
-    {% if errors|length %}
+    {% if canDownload and record.direction == 'export' and packageAvailable %}
+        <div class="buttons" style="margin-bottom:24px;">
+            <a href="{{ url('transport/history/' ~ record.id ~ '/download') }}" class="btn submit">
+                {{ "Download package"|t('transport') }}
+            </a>
+        </div>
+    {% endif %}
+
+    {% if report %}
+        <h2>{{ "Report"|t('transport') }}</h2>
+        {% include "transport/history/_report" with { report: report } only %}
+    {% elseif errors|length %}
         <h2>{{ "Errors"|t('transport') }}</h2>
         <ul class="errors">
             {% for error in errors %}<li>{{ error }}</li>{% endfor %}

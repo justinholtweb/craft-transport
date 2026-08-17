@@ -47,6 +47,24 @@ class VariantHandler extends BaseElementHandler
         ];
     }
 
+    /**
+     * A variant is identified by its SKU, which Commerce keeps unique.
+     */
+    public function matchExisting(array $data, ?int $siteId = null): ?ElementInterface
+    {
+        $sku = $data['attributes']['sku'] ?? null;
+        if (!$sku) {
+            return null;
+        }
+
+        $query = Variant::find()
+            ->sku($sku)
+            ->status(null)
+            ->orderBy(['elements.id' => SORT_ASC]);
+
+        return $this->scopeToSite($query, $siteId)->one();
+    }
+
     public function makeElement(array $attributes): ?ElementInterface
     {
         $productUid = $attributes['product'] ?? null;
