@@ -5,6 +5,17 @@
 {% set statusColors = { added: 'green', changed: 'orange', removed: 'red' } %}
 
 {% block content %}
+{% css %}
+    .transport-mb { margin-bottom: var(--l, 24px); }
+    .transport-mt { margin-top: var(--l, 24px); }
+    .transport-mt-s { margin: var(--s, 12px) 0 0; }
+    .transport-mt-0 { margin-top: 0; }
+    .transport-m-0 { margin: 0; }
+    .transport-cap { text-transform: capitalize; }
+    .transport-stats { display: flex; flex-wrap: wrap; gap: var(--xl, 40px); }
+    .transport-stat { font-size: 26px; font-weight: bold; line-height: 1.2; }
+{% endcss %}
+
     <form method="post" accept-charset="UTF-8">
         {{ csrfInput() }}
         <input type="hidden" name="action" value="transport/import/run">
@@ -20,12 +31,12 @@
             {% for entry in changes %}{% set pathList = pathList|merge([entry.path()]) %}{% endfor %}
             <input type="hidden" name="paths[{{ diff.uid }}]" value="{{ pathList|join(',') }}">
 
-            <div class="pane" style="margin-bottom:20px;">
-                <h2 style="margin-top:0;">
+            <div class="pane transport-mb">
+                <h2 class="transport-mt-0">
                     {{ diff.title }}
                     <span class="status {{ diff.action == 'add' ? 'green' : 'orange' }}"></span>
-                    <span class="light" style="text-transform:capitalize;">{{ diff.action }}</span>
-                    <span class="light" style="text-transform:capitalize;">· {{ diff.key }}</span>
+                    <span class="light transport-cap">{{ diff.action }}</span>
+                    <span class="light transport-cap">· {{ diff.key }}</span>
                 </h2>
 
                 {% if changes|length %}

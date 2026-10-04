@@ -7,6 +7,7 @@ use craft\helpers\Json;
 use craft\web\Controller;
 use justinholtweb\transport\Plugin;
 use justinholtweb\transport\records\ImportHistory;
+use yii\web\ForbiddenHttpException;
 use yii\web\NotFoundHttpException;
 use yii\web\Response as YiiResponse;
 
@@ -15,6 +16,19 @@ use yii\web\Response as YiiResponse;
  */
 class HistoryController extends Controller
 {
+    /**
+     * History holds reports, error logs and element titles from every section, so it needs one
+     * of the Transport permissions. Before 5.1.1 any control panel user could open it.
+     */
+    public function beforeAction($action): bool
+    {
+        if (!Plugin::canUseTransport()) {
+            throw new ForbiddenHttpException('User is not permitted to perform this action.');
+        }
+
+        return parent::beforeAction($action);
+    }
+
     public function actionIndex(): YiiResponse
     {
         $history = ImportHistory::find()
@@ -61,6 +75,11 @@ class HistoryController extends Controller
             throw new NotFoundHttpException();
         }
 
+        // A package holds what its exporter could view, which may be more than you can.
+        if (!self::canDownload($record)) {
+            throw new ForbiddenHttpException('Only an admin or the person who exported it can download this package.');
+        }
+
         $path = $this->packagePath($record);
         if ($path === null) {
             Craft::$app->getSession()->setError(Craft::t(
@@ -91,6 +110,17 @@ class HistoryController extends Controller
             . basename($record->packageName);
 
         return is_file($path) ? $path : null;
+    }
+
+    /**
+     * Whether the current user may download an export's package: an admin, or whoever ran it.
+     */
+    public static function canDownload(ImportHistory $record): bool
+    {
+        $user = Craft::$app->getUser();
+
+        return $user->checkPermission(Plugin::PERMISSION_EXPORT)
+            && ($user->getIsAdmin() || ($record->userId !== null && (int)$record->userId === (int)$user->getId()));
     }
 
     public function actionRollback(): YiiResponse

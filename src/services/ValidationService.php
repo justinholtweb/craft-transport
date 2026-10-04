@@ -3,7 +3,6 @@
 namespace justinholtweb\transport\services;
 
 use Craft;
-use justinholtweb\transport\elements\AssetHandler;
 use justinholtweb\transport\models\TransportPackage;
 use justinholtweb\transport\Plugin;
 use yii\base\Component;

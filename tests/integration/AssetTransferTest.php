@@ -134,4 +134,69 @@ final class AssetTransferTest extends TransportTestCase
         self::assertSame(0, $result['created']);
         self::assertSame(1, $result['updated']);
     }
+
+    /**
+     * Rewrites one asset's filename inside an exported package, and adds the bundled file under
+     * the in-zip path that name produces — what a hand-built malicious package looks like.
+     */
+    private function tamperFilename(string $path, string $filename, string $contents): void
+    {
+        $zip = new \ZipArchive();
+        self::assertTrue($zip->open($path) === true);
+        $assets = json_decode((string)$zip->getFromName('elements/assets.json'), true);
+        $assets[0]['attributes']['filename'] = $filename;
+        $zip->addFromString('elements/assets.json', json_encode($assets));
+        $zip->addFromString('files/' . \justinholtweb\transport\elements\AssetHandler::filePathFromAttributes($assets[0]['attributes']), $contents);
+        $zip->close();
+    }
+
+    public function testAPackageFilenameCannotWriteOutsideTheStagingDirectory(): void
+    {
+        $this->makeAsset('innocent.txt', 'x');
+        $path = $this->export(['assets'], 'asset-slip', ['includeAssetFiles' => true]);
+        $this->deleteAssets();
+
+        // Three levels up from <temp>/staged/<random>/ lands in the temp path's parent.
+        $name = 'slip-' . bin2hex(random_bytes(4)) . '.php';
+        $this->tamperFilename($path, '../../../' . $name, '<?php echo "pwned";');
+        $escaped = dirname($this->plugin()->getSettings()->getResolvedTempPath()) . '/' . $name;
+        $escapedOld = dirname($this->plugin()->getSettings()->getResolvedTempPath() . '/staged') . '/../' . $name;
+
+        // A dry run used to stage the file too.
+        $this->plugin()->import->importPackage($path, true);
+        $result = $this->plugin()->import->importPackage($path, false);
+
+        self::assertFileDoesNotExist($escaped);
+        self::assertFileDoesNotExist($escapedOld);
+        self::assertSame(0, $result['created']);
+        self::assertSame(1, $result['skipped']);
+    }
+
+    public function testATraversingButHarmlessNameIsImportedUnderItsBaseName(): void
+    {
+        $this->makeAsset('innocent.txt', 'x');
+        $path = $this->export(['assets'], 'asset-base', ['includeAssetFiles' => true]);
+        $this->deleteAssets();
+        $this->tamperFilename($path, '../../moved.txt', 'kept');
+
+        $result = $this->plugin()->import->importPackage($path, false);
+
+        self::assertSame(1, $result['created'], implode('; ', $result['errors']));
+        $asset = Asset::find()->volume(self::VOLUME)->status(null)->one();
+        self::assertSame('kept', stream_get_contents($asset->getStream()));
+        self::assertStringNotContainsString('..', (string)$asset->getFilename());
+    }
+
+    public function testSafeFilename(): void
+    {
+        $safe = [\justinholtweb\transport\services\AssetTransfer::class, 'safeFilename'];
+
+        self::assertSame('photo.jpg', $safe('photo.jpg'));
+        self::assertSame('x.txt', $safe('../../x.txt'));
+        self::assertSame('x.txt', $safe('..\\..\\x.txt'));
+        self::assertNull($safe('../../web/shell.php'));
+        self::assertNull($safe('.htaccess'));
+        self::assertNull($safe('noextension'));
+        self::assertNull($safe(''));
+    }
 }

@@ -22,6 +22,31 @@ use ZipArchive;
 class PackageManager extends Component
 {
     /**
+     * How many times its own size a package may unpack to. Serialized JSON compresses well, so
+     * this is generous; it exists to stop a zip bomb, not a large site.
+     */
+    public const MAX_EXPANSION = 20;
+
+    /**
+     * The total uncompressed size of a zip's entries in bytes, or null if it isn't a zip.
+     */
+    public function uncompressedSize(string $path): ?int
+    {
+        $zip = new ZipArchive();
+        if ($zip->open($path) !== true) {
+            return null;
+        }
+
+        $total = 0;
+        for ($i = 0; $i < $zip->numFiles; $i++) {
+            $total += (int)($zip->statIndex($i)['size'] ?? 0);
+        }
+        $zip->close();
+
+        return $total;
+    }
+
+    /**
      * Writes a package zip from grouped serialized elements and returns its path.
      *
      * @param array<string, array> $elementsByKey Serialized elements keyed by package key.
@@ -32,6 +57,9 @@ class PackageManager extends Component
         $tempPath = Plugin::getInstance()->getSettings()->getResolvedTempPath();
         FileHelper::createDirectory($tempPath);
 
+        // Whatever the caller passed, the package lands in the temp directory.
+        $name = $name !== null ? preg_replace('/[^A-Za-z0-9._-]/', '-', basename($name)) : null;
+        $name = $name !== null ? ltrim($name, '.') : null;
         $filename = ($name ?: 'transport-' . gmdate('Ymd-His')) . '.zip';
         $path = $tempPath . DIRECTORY_SEPARATOR . $filename;
 

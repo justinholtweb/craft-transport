@@ -8,6 +8,17 @@
 } %}
 
 {% block content %}
+{% css %}
+    .transport-mb { margin-bottom: var(--l, 24px); }
+    .transport-mt { margin-top: var(--l, 24px); }
+    .transport-mt-s { margin: var(--s, 12px) 0 0; }
+    .transport-mt-0 { margin-top: 0; }
+    .transport-m-0 { margin: 0; }
+    .transport-cap { text-transform: capitalize; }
+    .transport-stats { display: flex; flex-wrap: wrap; gap: var(--xl, 40px); }
+    .transport-stat { font-size: 26px; font-weight: bold; line-height: 1.2; }
+{% endcss %}
+
     {% if history|length %}
         <table class="data fullwidth">
             <thead>
@@ -35,13 +46,13 @@
                             {% for key, count in counts %}{{ key }}: {{ count }}{% if not loop.last %}, {% endif %}{% endfor %}
                         </td>
                         <td class="thin">
-                            {% if canDownload and row.direction == 'export' and row.status == 'completed' %}
+                            {% if canDownload and row.direction == 'export' and row.status == 'completed' and (currentUser.admin or row.userId == currentUser.id) %}
                                 <a href="{{ url('transport/history/' ~ row.id ~ '/download') }}" class="btn small">
                                     {{ "Download"|t('transport') }}
                                 </a>
                             {% endif %}
                             {% if canRollback and row.direction == 'import' and row.snapshotId and row.status == 'completed' %}
-                                <form method="post" style="margin:0;">
+                                <form method="post" class="transport-m-0">
                                     {{ csrfInput() }}
                                     <input type="hidden" name="action" value="transport/history/rollback">
                                     <input type="hidden" name="id" value="{{ row.id }}">

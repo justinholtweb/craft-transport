@@ -5,8 +5,10 @@ namespace justinholtweb\transport\services;
 use Craft;
 use craft\base\ElementInterface;
 use craft\elements\Asset;
+use craft\elements\User;
 use justinholtweb\transport\events\AfterImportEvent;
 use justinholtweb\transport\events\BeforeImportEvent;
+use justinholtweb\transport\helpers\Access;
 use justinholtweb\transport\helpers\IdentityHelper;
 use justinholtweb\transport\models\TransportPackage;
 use justinholtweb\transport\models\TransportReport;
@@ -111,6 +113,7 @@ class Import extends Component
             return $report;
         }
 
+        $actor = Access::actor($report->userId);
         $selectedUids = $options['selectedUids'] ?? null;
         $decisions = $options['decisions'] ?? [];
 
@@ -141,7 +144,7 @@ class Import extends Component
             $progress->start(self::STAGE_IMPORT, count($toImport));
 
             foreach ($toImport as $data) {
-                $this->importElement($package, $data, $siteMap, $report, $decisions[$data['uid'] ?? ''] ?? []);
+                $this->importElement($package, $data, $siteMap, $report, $decisions[$data['uid'] ?? ''] ?? [], $actor);
                 $progress->advance(sprintf('%s (%s)', TransportReport::titleOf($data), $data['key'] ?? 'element'));
             }
 
@@ -227,6 +230,7 @@ class Import extends Component
         array $siteMap,
         TransportReport $report,
         array $rejectedPaths = [],
+        ?User $actor = null,
     ): void {
         $plugin = Plugin::getInstance();
         $elementsService = Craft::$app->getElements();
@@ -258,6 +262,20 @@ class Import extends Component
             // New assets need their bundled file staged before saving.
             if ($element instanceof Asset && !$plugin->assets->stage($package, $data, $element)) {
                 continue;
+            }
+
+            // The import permission runs imports; what one may write is still bounded by the
+            // person's own permissions (sections, volumes, user accounts).
+            if (!Access::canSave($element, $actor)) {
+                $message = sprintf(
+                    '%s "%s" [%s]: you don’t have permission to save it here.',
+                    $data['type'] ?? 'element',
+                    $data['sites'][$sourceHandle]['title'] ?? ($data['uid'] ?? '?'),
+                    $sourceHandle
+                );
+                $report->record(TransportReport::ACTION_FAILED, $data, $message);
+                $report->recordError($message);
+                return;
             }
 
             if (!$elementsService->saveElement($element)) {

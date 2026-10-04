@@ -1,5 +1,34 @@
 # Release Notes for Transport
 
+## 5.1.1 — 2026-10-03
+
+### Security
+- An asset's filename in a package was used as given when staging its file, so a package
+  with a name like `../../web/x.php` could write a file anywhere the web server could, even
+  on a dry run. Staged files now use only the base name, sanitized like an upload, in a
+  directory of their own. A name whose extension isn't in `allowedFileExtensions` is refused
+  before anything is written.
+- The export package name accepted paths, so a package could be written outside the temp
+  directory. It is now a filename: letters, numbers, dots, dashes and underscores.
+- *Transport → History* and its run reports opened for any control panel user. They now
+  need one of the Transport permissions.
+- Anyone with the export permission could download any package, including one an admin
+  exported. Now only the exporter or an admin can.
+- The Transport permissions were the only check. An export read every section, volume and
+  user account. An import or rollback wrote to all of them, including admin accounts. Each
+  is now bounded by the person's own Craft permissions; see *Permissions* in the README.
+  Admins and console runs are unchanged.
+- The *Max package size* setting wasn't enforced. Uploads larger than it are now refused,
+  as are packages that unpack to more than 20 times it, or that aren't zips.
+
+### Changed
+- The import screens use Craft's own form fields and notices instead of hand-built markup
+  and hard-coded colours.
+
+> {note} If people who aren't admins run imports, check their section, volume and user
+> permissions first. An import that includes anything they couldn't save by hand now fails
+> as a whole: its report lists each refused element, and nothing from it is kept.
+
 ## 5.1.0 — 2026-08-17
 
 > {note} Control panel exports and imports now run on Craft's queue, so make sure a queue

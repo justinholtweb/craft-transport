@@ -23,6 +23,7 @@ class HistoryController extends Controller
 
     public function actionIndex(): int
     {
+        /** @var ImportHistory[] $rows */
         $rows = ImportHistory::find()
             ->orderBy(['dateCreated' => SORT_DESC])
             ->limit($this->limit)

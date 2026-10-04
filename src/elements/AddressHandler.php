@@ -2,7 +2,6 @@
 
 namespace justinholtweb\transport\elements;
 
-use Craft;
 use craft\base\ElementInterface;
 use craft\elements\Address;
 use craft\elements\db\ElementQueryInterface;
@@ -78,10 +77,11 @@ class AddressHandler extends BaseElementHandler
 
     public function applyAttributes(array $attributes, ElementInterface $element): void
     {
-        /** @var Address $element */
+        /** @var Address $address */
+        $address = $element;
         foreach (self::FIELDS as $name) {
             if (array_key_exists($name, $attributes) && $attributes[$name] !== null) {
-                $element->$name = $attributes[$name];
+                $address->$name = $attributes[$name];
             }
         }
     }

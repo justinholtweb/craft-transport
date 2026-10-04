@@ -3,7 +3,9 @@
 namespace justinholtweb\transport\services;
 
 use Craft;
+use craft\elements\User;
 use craft\helpers\Json;
+use justinholtweb\transport\helpers\Access;
 use justinholtweb\transport\helpers\IdentityHelper;
 use justinholtweb\transport\Plugin;
 use justinholtweb\transport\records\ElementSnapshot;
@@ -29,7 +31,7 @@ class Snapshotter extends Component
      * snapshotted as an update to restore, not as something to delete on rollback. The
      * entry records the resolved element's own UID for the same reason.
      *
-     * @param array<int, array{uid:string,type:string}> $refs Serialized elements, or at
+     * @param array<int, array<string, mixed>> $refs Serialized elements, or at
      *        minimum their uid and type.
      * @return array<int, array> Snapshot entries.
      */
@@ -82,6 +84,17 @@ class Snapshotter extends Component
         }
 
         $entries = $this->decompress($snapshot->elementData);
+
+        // All or nothing: a rollback that could restore only some of what it touched would leave
+        // content half-migrated. So check every element against the person's own permissions
+        // first — restoring needs save rights, removing what the import created needs delete.
+        $refused = $this->refusedForRollback($entries, Access::actor(Craft::$app->getUser()->getId()));
+        if ($refused) {
+            return ['status' => 'failed', 'restored' => 0, 'deleted' => 0, 'errors' => [
+                sprintf('You don’t have permission to roll back %d of these elements: %s', count($refused), implode(', ', array_slice($refused, 0, 5))),
+            ]];
+        }
+
         $refs = array_map(static fn($e) => ['uid' => $e['uid'], 'type' => $e['type']], $entries);
 
         // Record the rollback as its own history op, snapshot-protected for undo.
@@ -162,6 +175,34 @@ class Snapshotter extends Component
                 $result['deleted']++;
             }
         }
+    }
+
+    /**
+     * Labels of the elements in a snapshot that `$user` couldn't restore or delete.
+     *
+     * @return string[]
+     */
+    private function refusedForRollback(array $entries, ?User $user): array
+    {
+        if ($user === null || $user->admin) {
+            return [];
+        }
+
+        $refused = [];
+        foreach ($entries as $entry) {
+            IdentityHelper::flush();
+            $element = IdentityHelper::resolveElement($entry['uid'] ?? '', $entry['type'] ?? '');
+            if ($element === null) {
+                continue;
+            }
+
+            $allowed = !empty($entry['existed']) ? Access::canSave($element, $user) : Access::canDelete($element, $user);
+            if (!$allowed) {
+                $refused[] = sprintf('"%s"', $element->getUiLabel());
+            }
+        }
+
+        return $refused;
     }
 
     private function compress(array $entries): string

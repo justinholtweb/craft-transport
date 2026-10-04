@@ -9,6 +9,7 @@ use craft\web\UploadedFile;
 use justinholtweb\transport\models\DiffResult;
 use justinholtweb\transport\Plugin;
 use justinholtweb\transport\queue\ImportJob;
+use justinholtweb\transport\services\PackageManager;
 use yii\web\BadRequestHttpException;
 use yii\web\Response as YiiResponse;
 
@@ -162,12 +163,30 @@ class ImportController extends Controller
             return null;
         }
 
+        // The size limit was a setting with nothing behind it before 5.1.1.
+        $maxMb = Plugin::getInstance()->getSettings()->maxPackageSize;
+        if ($maxMb > 0 && $file->size > $maxMb * 1024 * 1024) {
+            Craft::$app->getSession()->setError(Craft::t('transport', 'That package is larger than the {max} MB limit.', ['max' => $maxMb]));
+            return null;
+        }
+
         $tempPath = Plugin::getInstance()->getSettings()->getResolvedTempPath();
         FileHelper::createDirectory($tempPath);
 
         $token = 'import-' . bin2hex(random_bytes(8)) . '.zip';
-        if (!$file->saveAs($tempPath . DIRECTORY_SEPARATOR . $token)) {
+        $path = $tempPath . DIRECTORY_SEPARATOR . $token;
+        if (!$file->saveAs($path)) {
             Craft::$app->getSession()->setError(Craft::t('transport', 'Couldn’t save the uploaded package.'));
+            return null;
+        }
+
+        // …and what it unpacks to, so a small zip can't expand to fill the disk or memory.
+        $unpacked = Plugin::getInstance()->packages->uncompressedSize($path);
+        if ($unpacked === null || ($maxMb > 0 && $unpacked > $maxMb * 1024 * 1024 * PackageManager::MAX_EXPANSION)) {
+            @unlink($path);
+            Craft::$app->getSession()->setError($unpacked === null
+                ? Craft::t('transport', 'That isn’t a Transport package.')
+                : Craft::t('transport', 'That package unpacks to more than the size limit allows.'));
             return null;
         }
 

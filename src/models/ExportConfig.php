@@ -52,6 +52,9 @@ class ExportConfig extends Model
             [['elementIds'], 'each', 'rule' => ['integer']],
             [['packageKeys'], 'each', 'rule' => ['string']],
             [['section', 'site', 'packageName'], 'string'],
+            // A filename, nothing more: before 5.1.1 `../../web/site` wrote the package outside
+            // the temp directory, somewhere it could be downloaded.
+            [['packageName'], 'match', 'pattern' => '/^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/', 'message' => 'Use letters, numbers, dots, dashes and underscores only.'],
             [['userId'], 'integer'],
             [['includeAssetFiles'], 'boolean'],
         ];

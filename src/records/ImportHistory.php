@@ -15,7 +15,7 @@ use yii\db\ActiveQueryInterface;
  * @property string $packageName
  * @property string $direction
  * @property string $status
- * @property array|null $elementCounts
+ * @property array|string|null $elementCounts
  * @property array|string|null $report
  * @property string|null $errorLog
  * @property int|null $snapshotId

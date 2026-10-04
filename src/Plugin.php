@@ -107,6 +107,22 @@ class Plugin extends BasePlugin
         ]);
     }
 
+    /**
+     * Whether the current user holds any of Transport's permissions.
+     */
+    public static function canUseTransport(): bool
+    {
+        $user = Craft::$app->getUser();
+
+        foreach ([self::PERMISSION_EXPORT, self::PERMISSION_IMPORT, self::PERMISSION_ROLLBACK] as $permission) {
+            if ($user->checkPermission($permission)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     public function getCpNavItem(): ?array
     {
         $item = parent::getCpNavItem();
@@ -119,7 +135,9 @@ class Plugin extends BasePlugin
         if ($user->checkPermission(self::PERMISSION_IMPORT)) {
             $subnav['import'] = ['label' => Craft::t('transport', 'Import'), 'url' => 'transport/import'];
         }
-        $subnav['history'] = ['label' => Craft::t('transport', 'History'), 'url' => 'transport/history'];
+        if (self::canUseTransport()) {
+            $subnav['history'] = ['label' => Craft::t('transport', 'History'), 'url' => 'transport/history'];
+        }
 
         if (Craft::$app->getUser()->getIsAdmin()) {
             $subnav['settings'] = ['label' => Craft::t('transport', 'Settings'), 'url' => 'transport/settings'];
@@ -153,7 +171,7 @@ class Plugin extends BasePlugin
         Event::on(
             UrlManager::class,
             UrlManager::EVENT_REGISTER_CP_URL_RULES,
-            function (RegisterUrlRulesEvent $event) {
+            function(RegisterUrlRulesEvent $event) {
                 $event->rules['transport'] = 'transport/export/index';
                 $event->rules['transport/export'] = 'transport/export/index';
                 $event->rules['transport/import'] = 'transport/import/upload';
@@ -171,7 +189,7 @@ class Plugin extends BasePlugin
         Event::on(
             UserPermissions::class,
             UserPermissions::EVENT_REGISTER_PERMISSIONS,
-            function (RegisterUserPermissionsEvent $event) {
+            function(RegisterUserPermissionsEvent $event) {
                 $event->permissions[] = [
                     'heading' => Craft::t('transport', 'Transport'),
                     'permissions' => [

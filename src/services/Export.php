@@ -4,8 +4,10 @@ namespace justinholtweb\transport\services;
 
 use Craft;
 use craft\base\ElementInterface;
+use craft\elements\db\EntryQuery;
 use justinholtweb\transport\events\AfterExportEvent;
 use justinholtweb\transport\events\BeforeExportEvent;
+use justinholtweb\transport\helpers\Access;
 use justinholtweb\transport\models\ExportConfig;
 use justinholtweb\transport\models\TransportReport;
 use justinholtweb\transport\Plugin;
@@ -71,6 +73,18 @@ class Export extends Component
 
         $progress->start(self::STAGE_GATHER);
         $elements = $this->gatherElements($config);
+
+        // Only what the person who started the export could view. Before 5.1.1 the export
+        // permission read every section, every volume and every user account.
+        $actor = Access::actor($report->userId);
+        if ($actor !== null) {
+            $visible = array_values(array_filter($elements, static fn(ElementInterface $e) => Access::canView($e, $actor)));
+            if (count($visible) < count($elements)) {
+                $progress->note(sprintf('%d element(s) left out: you can’t view them.', count($elements) - count($visible)));
+            }
+            $elements = $visible;
+        }
+
         $progress->finish(sprintf('Gathered %d element(s).', count($elements)));
 
         // Resolve a dependency-safe import order across the whole set.
@@ -165,7 +179,7 @@ class Export extends Component
             if ($key === 'entries') {
                 if (!empty($config->elementIds)) {
                     $query->id($config->elementIds);
-                } elseif ($config->section) {
+                } elseif ($config->section && $query instanceof EntryQuery) {
                     $query->section($config->section);
                 }
             }

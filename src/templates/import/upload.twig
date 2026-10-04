@@ -1,4 +1,5 @@
 {% extends "_layouts/cp" %}
+{% import "_includes/forms" as forms %}
 
 {% set title = "Import"|t('transport') %}
 
@@ -9,14 +10,17 @@
 
         <p>{{ "Upload a Transport package (.zip) to review and import its content into this environment."|t('transport') }}</p>
 
-        <div class="field">
-            <div class="heading">
-                <label>{{ "Package"|t('transport') }}</label>
-            </div>
-            <div class="input">
-                <input type="file" name="package" accept=".zip" required>
-            </div>
-        </div>
+        {% set maxSize = craft.app.plugins.getPlugin('transport').settings.maxPackageSize %}
+        {{ forms.field({
+            label: "Package"|t('transport'),
+            id: 'package',
+            instructions: maxSize > 0 ? "Up to {max} MB."|t('transport', { max: maxSize }) : null,
+            required: true,
+        }, forms.file({
+            id: 'package',
+            name: 'package',
+            inputAttributes: { accept: '.zip', required: true },
+        })) }}
 
         <div class="buttons">
             <button type="submit" class="btn submit">{{ "Review import"|t('transport') }}</button>

@@ -3,8 +3,8 @@
 namespace justinholtweb\transport\migrations;
 
 use craft\db\Migration;
-use justinholtweb\transport\records\ImportHistory;
 use justinholtweb\transport\records\ElementSnapshot;
+use justinholtweb\transport\records\ImportHistory;
 
 /**
  * Install migration — creates Transport's history and snapshot tables.

@@ -4,7 +4,18 @@
 {% set crumbs = [{ label: "History"|t('transport'), url: url('transport/history') }] %}
 
 {% block content %}
-    <table class="data fullwidth" style="margin-bottom:24px;">
+{% css %}
+    .transport-mb { margin-bottom: var(--l, 24px); }
+    .transport-mt { margin-top: var(--l, 24px); }
+    .transport-mt-s { margin: var(--s, 12px) 0 0; }
+    .transport-mt-0 { margin-top: 0; }
+    .transport-m-0 { margin: 0; }
+    .transport-cap { text-transform: capitalize; }
+    .transport-stats { display: flex; flex-wrap: wrap; gap: var(--xl, 40px); }
+    .transport-stat { font-size: 26px; font-weight: bold; line-height: 1.2; }
+{% endcss %}
+
+    <table class="data fullwidth transport-mb">
         <tbody>
             <tr><th>{{ "Date"|t('transport') }}</th><td>{{ record.dateCreated|datetime('short') }}</td></tr>
             <tr><th>{{ "Direction"|t('transport') }}</th><td>{{ record.direction }}</td></tr>
@@ -20,8 +31,8 @@
         </tbody>
     </table>
 
-    {% if canDownload and record.direction == 'export' and packageAvailable %}
-        <div class="buttons" style="margin-bottom:24px;">
+    {% if canDownload and record.direction == 'export' and packageAvailable and (currentUser.admin or record.userId == currentUser.id) %}
+        <div class="buttons transport-mb">
             <a href="{{ url('transport/history/' ~ record.id ~ '/download') }}" class="btn submit">
                 {{ "Download package"|t('transport') }}
             </a>
@@ -39,7 +50,7 @@
     {% endif %}
 
     {% if canRollback and record.direction == 'import' and record.snapshotId and record.status == 'completed' %}
-        <form method="post" style="margin-top:24px;">
+        <form method="post" class="transport-mt">
             {{ csrfInput() }}
             <input type="hidden" name="action" value="transport/history/rollback">
             <input type="hidden" name="id" value="{{ record.id }}">

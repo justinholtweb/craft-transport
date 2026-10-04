@@ -139,10 +139,33 @@ craft transport/history
 craft transport/rollback 42
 ```
 
+## Permissions
+
+| Permission | Lets someone |
+| --- | --- |
+| `transport:export` | Queue exports, and download the packages they exported |
+| `transport:import` | Upload and run imports |
+| `transport:rollback` | Roll back completed imports |
+
+Any one of them opens *Transport → History*. Settings are admin-only.
+
+These say who may *run* a migration. What it reads and writes is still bounded by the
+person's own Craft permissions:
+
+- An export holds only the elements its exporter can view.
+- An import only writes what its importer could save by hand: a section they can edit, a
+  volume they can upload to, user accounts they can manage. Admin accounts can only be
+  changed by an admin.
+- A rollback only runs if the person can restore, or delete, every element it would touch.
+- A package can be downloaded by the person who exported it, or by an admin.
+
+Admins and console runs (`craft transport/…`) aren't limited.
+
 ## Settings
 
 - **Temp path** — where packages are staged (`@storage/transport` by default).
-- **Max package size** — upload limit for import.
+- **Max package size** — upload limit for import, in MB (`0` for none). A package also may not
+  unpack to more than 20 times this.
 - **Include asset files** — bundle files by default, or export metadata only.
 - **Snapshot retention** — how long / how many import snapshots to keep.
 - **Match existing content on import** — recognise elements that already exist here under

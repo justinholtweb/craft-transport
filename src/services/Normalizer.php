@@ -127,7 +127,7 @@ class Normalizer extends Component
         $handles = array_keys($data['sites'] ?? []);
         $primary = Craft::$app->getSites()->getPrimarySite()->handle;
 
-        usort($handles, static function ($a, $b) use ($primary) {
+        usort($handles, static function($a, $b) use ($primary) {
             if ($a === $primary) {
                 return -1;
             }
@@ -203,4 +203,3 @@ class Normalizer extends Component
             ->one();
     }
 }
-

@@ -56,6 +56,21 @@ tests/
   unit/                         PHPUnit tests
   integration/                  Codeception tests
     TransportTestCase.php       shared schema + element fixtures
+  harness/security.php          permission checks over HTTP (plugin-testing harness)
 ```
 
 `codeception.yml` lives at the project root.
+
+## Security checks (plugin-testing harness)
+
+`tests/harness/security.php` checks who can read and change what — History access, package
+downloads, and exports, imports and rollbacks bounded by the user's own Craft permissions —
+over real HTTP sessions with limited users. It needs the shared plugin-testing site with
+Transport installed, and cleans up after itself:
+
+```bash
+docker exec -w /var/www/html ddev-plugin-testing-web php /var/www/craft-transport/tests/harness/security.php
+```
+
+It takes several minutes, since each check exports a whole section. The zip-slip and
+package-name fixes are covered by `AssetTransferTest` and `ExportConfigTest`.

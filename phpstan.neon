@@ -1,0 +1,35 @@
+includes:
+    - vendor/craftcms/phpstan/phpstan.neon
+
+parameters:
+    level: 4
+    paths:
+        - src
+    excludePaths:
+        - src/templates
+    ignoreErrors:
+        # Commerce, Solspace Calendar, Navigation, Formie, Free Link, Hyper, Neo, SEOmatic, Super
+        # Table and Google Maps are optional. Their handlers are only registered when the plugin is
+        # installed (FieldRegistry checks class_exists()), so the classes are absent from vendor here.
+        # Scoped by path + identifier so a genuinely missing class in core code still fails.
+        -
+            identifier: class.notFound
+            paths:
+                - src/elements/commerce/*
+                - src/elements/thirdparty/*
+                - src/fields/thirdparty/*
+                - src/services/FieldRegistry.php
+        -
+            identifiers:
+                - varTag.nativeType
+                - return.type
+            paths:
+                - src/elements/commerce/*
+                - src/elements/thirdparty/*
+        -
+            identifiers:
+                - property.notFound
+                - method.notFound
+                - staticMethod.notFound
+            paths:
+                - src/fields/thirdparty/*

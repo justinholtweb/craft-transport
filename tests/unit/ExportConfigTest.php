@@ -57,4 +57,18 @@ class ExportConfigTest extends TestCase
 
         $this->assertTrue($config->validate(['elementIds']));
     }
+
+    public function testPackageNameIsAFilenameOnly(): void
+    {
+        foreach (['../../web/site', '/etc/passwd', '.hidden', 'a/b', 'a\\b', str_repeat('a', 101)] as $bad) {
+            $config = new ExportConfig(['packageName' => $bad]);
+            self::assertFalse($config->validate(), $bad);
+            self::assertTrue($config->hasErrors('packageName'), $bad);
+        }
+
+        foreach (['site-2026.10.03', 'Staging_Export', 'a'] as $good) {
+            $config = new ExportConfig(['packageName' => $good]);
+            self::assertTrue($config->validate(), $good . ': ' . json_encode($config->getErrors()));
+        }
+    }
 }

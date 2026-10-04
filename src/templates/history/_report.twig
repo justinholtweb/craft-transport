@@ -1,3 +1,13 @@
+{% css %}
+    .transport-mb { margin-bottom: var(--l, 24px); }
+    .transport-mt { margin-top: var(--l, 24px); }
+    .transport-mt-s { margin: var(--s, 12px) 0 0; }
+    .transport-mt-0 { margin-top: 0; }
+    .transport-m-0 { margin: 0; }
+    .transport-cap { text-transform: capitalize; }
+    .transport-stats { display: flex; flex-wrap: wrap; gap: var(--xl, 40px); }
+    .transport-stat { font-size: 26px; font-weight: bold; line-height: 1.2; }
+{% endcss %}
 {# Renders a TransportReport: totals, per-type breakdown, and the elements behind each
    outcome. Shared by the history detail screen and the dry-run results screen. #}
 
@@ -11,28 +21,28 @@
 } %}
 {% set colors = { created: 'green', updated: 'orange', skipped: 'light', failed: 'red' } %}
 
-<div class="pane" style="margin-bottom:24px;">
-    <div style="display:flex;gap:40px;flex-wrap:wrap;">
+<div class="pane transport-mb">
+    <div class="transport-stats">
         {% for action, label in labels %}
             <div>
-                <div style="font-size:26px;font-weight:bold;line-height:1.2;">{{ report.countOf(action) }}</div>
+                <div class="transport-stat">{{ report.countOf(action) }}</div>
                 <div class="light">{{ label }}</div>
             </div>
         {% endfor %}
         <div>
-            <div style="font-size:26px;font-weight:bold;line-height:1.2;">{{ "%.1fs"|format(report.duration) }}</div>
+            <div class="transport-stat">{{ "%.1fs"|format(report.duration) }}</div>
             <div class="light">{{ "Duration"|t('transport') }}</div>
         </div>
     </div>
 
     {% if report.dryRun %}
-        <p style="margin:12px 0 0;"><strong>{{ "Dry run"|t('transport') }}</strong> — {{ "no changes were saved."|t('transport') }}</p>
+        <p class="transport-mt-s"><strong>{{ "Dry run"|t('transport') }}</strong> — {{ "no changes were saved."|t('transport') }}</p>
     {% endif %}
 </div>
 
 {% if report.countsByKey|length %}
     <h2>{{ "By type"|t('transport') }}</h2>
-    <table class="data fullwidth" style="margin-bottom:24px;">
+    <table class="data fullwidth transport-mb">
         <thead>
             <tr>
                 <th>{{ "Type"|t('transport') }}</th>
@@ -42,7 +52,7 @@
         <tbody>
             {% for key, counts in report.countsByKey %}
                 <tr>
-                    <td style="text-transform:capitalize;">{{ key }}</td>
+                    <td class="transport-cap">{{ key }}</td>
                     {% for action, label in labels %}<td class="thin">{{ counts[action] ?? 0 }}</td>{% endfor %}
                 </tr>
             {% endfor %}
@@ -57,7 +67,7 @@
             <span class="status {{ colors[action] }}"></span>
             {{ label }} ({{ report.countOf(action) }})
         </h2>
-        <table class="data fullwidth" style="margin-bottom:24px;">
+        <table class="data fullwidth transport-mb">
             <thead>
                 <tr>
                     <th>{{ "Title"|t('transport') }}</th>
@@ -69,7 +79,7 @@
                 {% for item in items|slice(0, detailLimit) %}
                     <tr>
                         <td>{{ item.title ?: item.uid }}</td>
-                        <td class="thin" style="text-transform:capitalize;">{{ item.key }}</td>
+                        <td class="thin transport-cap">{{ item.key }}</td>
                         <td class="light">{{ item.detail }}</td>
                     </tr>
                 {% endfor %}

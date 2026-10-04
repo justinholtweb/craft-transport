@@ -6,6 +6,7 @@ use Craft;
 use craft\base\ElementInterface;
 use craft\elements\Asset;
 use craft\elements\db\ElementQueryInterface;
+use craft\helpers\Assets;
 
 /**
  * Element handler for assets.
@@ -63,7 +64,7 @@ class AssetHandler extends BaseElementHandler
         $asset->setVolumeId($volume->id);
         $asset->folderId = $folder->id;
         if (!empty($attributes['filename'])) {
-            $asset->setFilename($attributes['filename']);
+            $asset->setFilename(self::baseFilename($attributes['filename']));
         }
 
         return $asset;
@@ -77,7 +78,7 @@ class AssetHandler extends BaseElementHandler
     public function matchExisting(array $data, ?int $siteId = null): ?ElementInterface
     {
         $attributes = $data['attributes'] ?? [];
-        $filename = $attributes['filename'] ?? null;
+        $filename = !empty($attributes['filename']) ? self::baseFilename($attributes['filename']) : null;
 
         $volume = isset($attributes['volume'])
             ? Craft::$app->getVolumes()->getVolumeByHandle($attributes['volume'])
@@ -117,6 +118,15 @@ class AssetHandler extends BaseElementHandler
     /**
      * The in-package path for an asset's file, derived from serialized attributes.
      */
+    /**
+     * A package's filename reduced to a name, the way the staged file is named. The package is
+     * untrusted, so `../../x.txt` is `x.txt` here.
+     */
+    public static function baseFilename(string $filename): string
+    {
+        return Assets::prepareAssetName(basename(str_replace('\\', '/', $filename)));
+    }
+
     public static function filePathFromAttributes(array $attributes): string
     {
         $volume = $attributes['volume'] ?? 'volume';

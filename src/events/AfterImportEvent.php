@@ -14,7 +14,7 @@ class AfterImportEvent extends Event
     /** @var TransportPackage The imported package. */
     public TransportPackage $package;
 
-    /** @var array{status:string,created:int,updated:int,skipped:int,failed:int,errors:string[]} The import result. */
+    /** @var array{status?:string,created?:int,updated?:int,skipped?:int,failed?:int,errors?:string[]} The import result (empty until set). */
     public array $result = [];
 
     /** @var TransportReport|null Detailed per-element outcome of the import. */
