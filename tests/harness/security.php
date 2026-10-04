@@ -64,6 +64,17 @@ $password = 'tp-' . bin2hex(random_bytes(12));
 $cleanup = ['users' => [], 'entries' => [], 'history' => [], 'files' => []];
 
 register_shutdown_function(function() use (&$cleanup) {
+    if (!empty($cleanup['groups'])) {
+        Craft::$app->getInfo()->configVersion = (string)(new Query())->select('configVersion')->from('{{%info}}')->scalar();
+        Craft::$app->getProjectConfig()->reset();
+    }
+    foreach ($cleanup['groups'] ?? [] as $group) {
+        Craft::$app->getUserGroups()->deleteGroup($group);
+    }
+    if (!empty($cleanup['groups'])) {
+        Craft::$app->getProjectConfig()->saveModifiedConfigData();
+        Craft::$app->getProjectConfig()->writeYamlFiles(true);
+    }
     foreach (array_merge($cleanup['entries'], $cleanup['users']) as $element) {
         Craft::$app->getElements()->deleteElement($element, true);
     }
@@ -283,6 +294,88 @@ check('…and an admin can', function() use ($transport, $editedPackage, $titleN
 });
 
 // -------------------------------------------------------------------------------------------
+echo "\nUser groups\n";
+
+// Three throwaway groups. The editor may assign users to A only. Groups are project config, and
+// the web requests above (and other work in the harness) may have moved it on: reload first.
+Craft::$app->getInfo()->configVersion = (string)(new Query())->select('configVersion')->from('{{%info}}')->scalar();
+Craft::$app->getProjectConfig()->reset();
+$groups = [];
+foreach (['A', 'B', 'C'] as $letter) {
+    $group = new craft\models\UserGroup(['name' => "Transport $letter $run", 'handle' => "transport{$letter}$run"]);
+    Craft::$app->getUserGroups()->saveGroup($group) or throw new RuntimeException(json_encode($group->getErrors()));
+    $groups[$letter] = $group;
+}
+$cleanup['groups'] = $groups;
+Craft::$app->getProjectConfig()->saveModifiedConfigData();
+Craft::$app->getProjectConfig()->writeYamlFiles(true);
+// Craft works out the list of valid permissions once per process — before these groups existed
+// — and drops any it doesn't recognise. A fresh service knows about them.
+Craft::$app->set('userPermissions', new craft\services\UserPermissions());
+Craft::$app->getUserPermissions()->saveUserPermissions($editor->id, array_merge(
+    Craft::$app->getUserPermissions()->getPermissionsByUserId($editor->id),
+    ['assignusergroup:' . $groups['A']->uid],
+));
+
+$groupHandles = static fn(User $user) => array_values(array_map(fn($g) => $g->handle, Craft::$app->getUserGroups()->getGroupsByUserId($user->id)));
+$sorted = static function(array $handles) { sort($handles); return $handles; };
+
+/** A users package holding only `$target`, saying they belong to `$handles`. */
+$groupsPackage = static function(User $target, array $handles) use ($transport, $run, &$cleanup): string {
+    $report = $transport->export->run(new ExportConfig(['packageKeys' => ['users'], 'packageName' => "tp-sec-groups-$run-" . bin2hex(random_bytes(2))]));
+    $cleanup['history'][] = $report->historyId;
+    $cleanup['files'][] = $report->packagePath;
+    $zip = new ZipArchive();
+    $zip->open($report->packagePath);
+    $users = array_values(array_filter(json_decode((string)$zip->getFromName('elements/users.json'), true), fn($u) => ($u['uid'] ?? null) === $target->uid));
+    $users[0]['attributes']['groups'] = $handles;
+    $zip->addFromString('elements/users.json', json_encode($users));
+    $zip->close();
+
+    return $report->packagePath;
+};
+
+check('a console import gives a user exactly the groups the package names', function() use ($transport, $groupsPackage, $nobody, $groups, $groupHandles, $sorted, $run, &$cleanup) {
+    Craft::$app->getUsers()->assignUserToGroups($nobody->id, [$groups['C']->id]);
+    $report = $transport->import->run($groupsPackage($nobody, ["transportA$run", "transportB$run"]), false);
+    $cleanup['history'][] = $report->historyId;
+
+    return $sorted($groupHandles($nobody)) === $sorted(["transportA$run", "transportB$run"]) ?: json_encode([$groupHandles($nobody), $report->errors]);
+});
+
+check('…a non-admin changes only the groups they may assign, and the rest stay as they were', function() use ($transport, $groupsPackage, $nobody, $editor, $groups, $groupHandles, $sorted, $run, &$cleanup) {
+    // Now in C only. The package says A and B. The editor may assign A, not B or C.
+    Craft::$app->getUsers()->assignUserToGroups($nobody->id, [$groups['C']->id]);
+    $report = $transport->import->run($groupsPackage($nobody, ["transportA$run", "transportB$run"]), false, [], ['userId' => $editor->id]);
+    $cleanup['history'][] = $report->historyId;
+    $notes = implode(' ', array_column($report->itemsFor('updated'), 'detail'));
+
+    return $sorted($groupHandles($nobody)) === $sorted(["transportA$run", "transportC$run"])
+        && str_contains($notes, "Transport B $run") && str_contains($notes, "Transport C $run")
+        ?: json_encode([$groupHandles($nobody), $notes, $report->errors]);
+});
+
+check('…a group that doesn’t exist here is skipped and said so', function() use ($transport, $groupsPackage, $nobody, $groupHandles, $run, &$cleanup) {
+    $report = $transport->import->run($groupsPackage($nobody, ["transportA$run", "noSuchGroup$run"]), false);
+    $cleanup['history'][] = $report->historyId;
+    $notes = implode(' ', array_column($report->itemsFor('updated'), 'detail'));
+
+    return $groupHandles($nobody) === ["transportA$run"] && str_contains($notes, "noSuchGroup$run") ?: json_encode([$groupHandles($nobody), $notes]);
+});
+
+check('…and a rollback puts the groups back as they were', function() use ($transport, $groupsPackage, $nobody, $groups, $groupHandles, $run, &$cleanup) {
+    Craft::$app->getUsers()->assignUserToGroups($nobody->id, [$groups['C']->id]);
+    $report = $transport->import->run($groupsPackage($nobody, ["transportB$run"]), false);
+    $cleanup['history'][] = $report->historyId;
+    $afterImport = $groupHandles($nobody);
+    $result = $transport->snapshots->rollback(ImportHistory::findOne($report->historyId));
+    foreach ((new Query())->select('id')->from('{{%transport_history}}')->where(['packageName' => "Rollback of #{$report->historyId}"])->column() as $id) {
+        $cleanup['history'][] = (int)$id;
+    }
+
+    return $afterImport === ["transportB$run"] && $groupHandles($nobody) === ["transportC$run"] ?: json_encode([$afterImport, $groupHandles($nobody), $result['errors']]);
+});
+
 echo "\nUploads\n";
 
 $upload = static function(Client $http, string $contents) {

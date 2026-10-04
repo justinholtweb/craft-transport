@@ -1,5 +1,15 @@
 # Release Notes for Transport
 
+## 5.1.2 — 2026-10-04
+
+### Fixed
+- User group memberships were exported but never applied. An imported user arrived in no groups,
+  and an updated one kept whatever they had. Imports now set them, and rollbacks restore them.
+  Admins and console runs set exactly the groups the package names. Anyone else changes only the
+  groups they may assign users to (Craft's *Assign users to “…”* permissions); memberships in
+  other groups stay as they were, and the report says which. A group that doesn't exist here is
+  skipped and reported.
+
 ## 5.1.1 — 2026-10-03
 
 ### Security

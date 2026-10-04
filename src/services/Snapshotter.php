@@ -5,6 +5,7 @@ namespace justinholtweb\transport\services;
 use Craft;
 use craft\elements\User;
 use craft\helpers\Json;
+use justinholtweb\transport\elements\UserHandler;
 use justinholtweb\transport\helpers\Access;
 use justinholtweb\transport\helpers\IdentityHelper;
 use justinholtweb\transport\Plugin;
@@ -22,6 +23,9 @@ use yii\base\Component;
  */
 class Snapshotter extends Component
 {
+    /** Who a rollback in progress is acting for; null for console runs and admins' unrestricted runs. */
+    private ?User $rollbackActor = null;
+
     /**
      * Captures the current state of the given elements so it can be restored later.
      * Reads the live DB, so call before any mutation.
@@ -88,7 +92,8 @@ class Snapshotter extends Component
         // All or nothing: a rollback that could restore only some of what it touched would leave
         // content half-migrated. So check every element against the person's own permissions
         // first — restoring needs save rights, removing what the import created needs delete.
-        $refused = $this->refusedForRollback($entries, Access::actor(Craft::$app->getUser()->getId()));
+        $this->rollbackActor = Access::actor(Craft::$app->getUser()->getId());
+        $refused = $this->refusedForRollback($entries, $this->rollbackActor);
         if ($refused) {
             return ['status' => 'failed', 'restored' => 0, 'deleted' => 0, 'errors' => [
                 sprintf('You don’t have permission to roll back %d of these elements: %s', count($refused), implode(', ', array_slice($refused, 0, 5))),
@@ -153,11 +158,17 @@ class Snapshotter extends Component
             }
             IdentityHelper::flush();
             $restoredThis = false;
+            $restored = null;
             foreach ($normalizer->orderedSiteHandles($entry['data']) as $siteHandle) {
                 $element = $normalizer->normalizeElementForSite($entry['data'], $siteHandle);
                 if ($element && $elementsService->saveElement($element)) {
                     $restoredThis = true;
+                    $restored = $element;
                 }
+            }
+            // A restored user gets their groups back too, within the same rights as an import.
+            if ($restored instanceof User) {
+                UserHandler::syncGroups($restored, $entry['data'], $this->rollbackActor);
             }
             if ($restoredThis) {
                 $result['restored']++;

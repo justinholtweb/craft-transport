@@ -6,6 +6,7 @@ use Craft;
 use craft\base\ElementInterface;
 use craft\elements\Asset;
 use craft\elements\User;
+use justinholtweb\transport\elements\UserHandler;
 use justinholtweb\transport\events\AfterImportEvent;
 use justinholtweb\transport\events\BeforeImportEvent;
 use justinholtweb\transport\helpers\Access;
@@ -295,6 +296,7 @@ class Import extends Component
 
             $targetId ??= $element->id;
             $savedAny = true;
+            $saved = $element;
         }
 
         if (!$savedAny) {
@@ -306,10 +308,13 @@ class Import extends Component
             return;
         }
 
+        // Group memberships aren't saved with the user; they follow, within the importer's rights.
+        $notes = isset($saved) && $saved instanceof User ? UserHandler::syncGroups($saved, $data, $actor) : [];
+
         $report->record(
             $isUpdate ? TransportReport::ACTION_UPDATED : TransportReport::ACTION_CREATED,
             $data,
-            $adopted ? $this->adoptionNote($existing) : ''
+            implode(' ', array_filter([$adopted ? $this->adoptionNote($existing) : '', ...$notes]))
         );
     }
 

@@ -153,9 +153,10 @@ These say who may *run* a migration. What it reads and writes is still bounded b
 person's own Craft permissions:
 
 - An export holds only the elements its exporter can view.
-- An import only writes what its importer could save by hand: a section they can edit, a
-  volume they can upload to, user accounts they can manage. Admin accounts can only be
-  changed by an admin.
+- An import only writes what its importer could save by hand: a section they can edit, a volume
+  they can upload to, user accounts they can manage. Admin accounts can only be changed by an
+  admin. User group memberships follow the package, but a non-admin only changes the groups
+  they may assign users to; the report notes the rest.
 - A rollback only runs if the person can restore, or delete, every element it would touch.
 - A package can be downloaded by the person who exported it, or by an admin.
 
