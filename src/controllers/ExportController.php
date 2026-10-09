@@ -58,6 +58,7 @@ class ExportController extends Controller
         $config->packageKeys = array_values(array_filter((array)$request->getBodyParam('packageKeys', ['entries'])));
         $config->elementIds = array_filter(array_map('intval', (array)$request->getBodyParam('elementIds', [])));
         $config->includeAssetFiles = (bool)$request->getBodyParam('includeAssetFiles', true);
+        $config->includeDependencies = (bool)$request->getBodyParam('includeDependencies', false);
         $config->packageName = $request->getBodyParam('packageName') ?: null;
 
         if (!$config->packageKeys) {

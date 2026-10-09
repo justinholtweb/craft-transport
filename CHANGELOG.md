@@ -1,5 +1,32 @@
 # Release Notes for Transport
 
+## Unreleased
+
+### Added
+- Every control panel action now has a console command. `transport/import/diff` shows what an
+  import would change, field by field — the wizard's Configure and Preview steps — and exits
+  non-zero when pre-flight validation would block it. `transport/history/view` prints a run's
+  report and `transport/history/download` copies out an export's package.
+- `transport/export --ids=…` exports chosen elements of any type, and `--package-name` names
+  the package.
+- Exports can include their dependencies: *Include dependencies* on the Export screen, or
+  `--with-dependencies`, also exports the related entries, categories, tags, assets, authors
+  and parents the selection references, and theirs in turn.
+- `transport/import --only=<uid>,…` imports just those elements, and `--keep-local=<uid>:<site>.<field>`
+  keeps a field's current value — the wizard's selection and unticked fields.
+- `transport/rollback --dry-run` lists what a rollback would restore and delete without changing anything.
+
+### Changed
+- Element IDs on an export now narrow every selected element type, not just entries.
+- `transport/import` refuses a real import while pre-flight validation finds blocking problems,
+  as the wizard always has (exit code 65). Dry runs still go ahead.
+- `transport/export` exits non-zero for an unknown element type or site, a package name that
+  isn't a plain filename, or an `--output` it can't write. Unknown types used to be skipped silently.
+
+### Fixed
+- `transport/rollback --interactive=0` answered its own prompt "no" and exited 0 without
+  rolling anything back. It now rolls back.
+
 ## 5.1.2 — 2026-10-04
 
 ### Fixed

@@ -88,7 +88,7 @@ environments don't hit the same mismatch.
 ## Exporting
 
 **Control panel:** *Transport → Export*. Choose the site, the element types to include,
-optionally a section, and whether to bundle asset files. Submitting queues the export —
+optionally a section, whether to include dependencies, and whether to bundle asset files. Submitting queues the export —
 it runs in the background so a large site can't time out. When it finishes, download the
 package from *Transport → History*, and (if you asked to be notified) you'll get an email
 with the full report.
@@ -101,7 +101,19 @@ craft transport/export --types=entries,categories,assets --site=default --output
 craft transport/export --section=blog --output=blog.zip
 craft transport/export --all --output=everything.zip --verbose   # list every element
 craft transport/export --all --output=everything.zip --quiet     # report only
+craft transport/export --ids=12,15 --output=two.zip              # just these elements, any type
+craft transport/export --ids=12 --with-dependencies --package-name=launch
 ```
+
+`--ids` narrows every selected element type to those IDs (without `--types`, every type is
+searched, so the IDs decide). **Include dependencies** (`--with-dependencies`) also exports
+everything the selection references — related entries, categories, tags and assets, authors,
+structure parents — and what those reference in turn, so the package imports cleanly into an
+environment that has none of them. It stops at 10,000 added elements, and still leaves out
+anything the exporter can't view.
+
+Unknown types, sites or IDs, a package name that isn't a plain filename, or an `--output` that
+can't be written exit non-zero.
 
 ## Importing
 
@@ -124,7 +136,15 @@ to the terminal, finishing with a detailed report:
 craft transport/import content.zip --dry-run   # simulate, report what would change
 craft transport/import content.zip             # import
 craft transport/import content.zip --verbose   # list every element as it is processed
+craft transport/import/diff content.zip --verbose   # the wizard's Configure + Preview steps
+craft transport/import content.zip --only=<uid>,<uid> --keep-local=<uid>:default.title
 ```
+
+`transport/import/diff` runs pre-flight validation and lists every element as add / update /
+unchanged; `--verbose` adds each changed field with the `<uid>:<site>.<field>` path that
+`--keep-local` takes (the wizard's unticked fields). `--only` imports just the listed UIDs (the
+wizard's selection). As in the wizard, a real import is refused (exit 65) while validation finds
+blocking problems; a dry run still goes ahead.
 
 ## History & rollback
 
@@ -136,8 +156,27 @@ Rollbacks are snapshot-protected, so they can be undone too.
 
 ```bash
 craft transport/history
-craft transport/rollback 42
+craft transport/history/view 42 --verbose          # one run's full report
+craft transport/history/download 41 --output=x.zip # an export's package
+craft transport/rollback 42 --dry-run              # what it would restore and delete
+craft transport/rollback 42 --interactive=0        # no prompt, for scripts
 ```
+
+### Control panel actions and their console commands
+
+| Control panel | Console |
+| --- | --- |
+| Export → *Queue export* (site, types, section, package name, asset files, dependencies) | `transport/export --site --types --section --package-name --metadata-only --with-dependencies` (`--ids` for chosen elements) |
+| Import → Upload + Configure + Preview | `transport/import/diff <zip> [--verbose]` |
+| Import → Run (selection, unticked fields, dry run) | `transport/import <zip> [--only] [--keep-local] [--dry-run]` |
+| History | `transport/history` |
+| History → a run's report | `transport/history/view <id>` |
+| History → Download | `transport/history/download <id> [--output]` |
+| History → Roll back | `transport/rollback <id> [--dry-run]` |
+| Settings | project config / `config/transport.php` |
+
+Console commands run inline, with the same services as the control panel, and exit non-zero
+on failure.
 
 ## Permissions
 

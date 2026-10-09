@@ -58,6 +58,13 @@
         }) }}
 
         {{ forms.lightswitchField({
+            label: "Include dependencies"|t('transport'),
+            instructions: "Also export what this content references — related entries, categories, assets, authors and parents — so it imports cleanly into an environment that has none of them."|t('transport'),
+            name: 'includeDependencies',
+            on: false,
+        }) }}
+
+        {{ forms.lightswitchField({
             label: "Include asset files"|t('transport'),
             name: 'includeAssetFiles',
             on: true,

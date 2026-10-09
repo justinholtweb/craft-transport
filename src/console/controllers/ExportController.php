@@ -2,6 +2,7 @@
 
 namespace justinholtweb\transport\console\controllers;
 
+use Craft;
 use craft\console\Controller;
 use craft\helpers\Console;
 use justinholtweb\transport\console\ReportPrinter;
@@ -20,6 +21,7 @@ use yii\console\ExitCode;
  * Usage:
  *   craft transport/export --section=blog --site=default --output=blog.zip
  *   craft transport/export --types=entries,categories,assets --all --verbose
+ *   craft transport/export --ids=12,15 --with-dependencies --package-name=launch
  */
 class ExportController extends Controller
 {
@@ -29,8 +31,20 @@ class ExportController extends Controller
     /** @var string|null Site handle to export from (defaults to the primary site). */
     public ?string $site = null;
 
-    /** @var string Comma-separated element types (package keys) to export. */
-    public string $types = 'entries';
+    /**
+     * @var string|null Comma-separated element types (package keys) to export. Defaults to
+     *                  entries — or, with --ids, to every type, so the IDs decide.
+     */
+    public ?string $types = null;
+
+    /** @var string|null Comma-separated element IDs to export (any type), instead of whole sections. */
+    public ?string $ids = null;
+
+    /** @var bool Also export everything the selection references (relations, authors, parents, assets). */
+    public bool $withDependencies = false;
+
+    /** @var string|null Package filename, without extension. */
+    public ?string $packageName = null;
 
     /** @var bool Export every supported element type. */
     public bool $all = false;
@@ -50,7 +64,7 @@ class ExportController extends Controller
     public function options($actionID): array
     {
         return array_merge(parent::options($actionID), [
-            'section', 'site', 'types', 'all', 'output', 'metadataOnly', 'verbose', 'quiet',
+            'section', 'site', 'types', 'ids', 'withDependencies', 'packageName', 'all', 'output', 'metadataOnly', 'verbose', 'quiet',
         ]);
     }
 
@@ -60,10 +74,48 @@ class ExportController extends Controller
         $config->section = $this->section;
         $config->site = $this->site;
         $config->includeAssetFiles = !$this->metadataOnly;
+        $config->includeDependencies = $this->withDependencies;
+        $config->packageName = $this->packageName;
 
-        $config->packageKeys = $this->all
-            ? $this->allPackageKeys()
-            : array_values(array_filter(array_map('trim', explode(',', $this->types))));
+        if ($this->ids !== null) {
+            $ids = $this->splitList($this->ids);
+            foreach ($ids as $id) {
+                if (!ctype_digit($id)) {
+                    $this->stderr("Not an element ID: $id\n", Console::FG_RED);
+                    return ExitCode::USAGE;
+                }
+            }
+            $config->elementIds = array_map('intval', $ids);
+            if (!$config->elementIds) {
+                $this->stderr("--ids needs at least one element ID.\n", Console::FG_RED);
+                return ExitCode::USAGE;
+            }
+        }
+
+        if ($this->all || ($this->types === null && $config->elementIds)) {
+            $config->packageKeys = $this->allPackageKeys();
+        } else {
+            $config->packageKeys = $this->splitList($this->types ?? 'entries');
+            $unknown = array_diff($config->packageKeys, $this->allPackageKeys());
+            if ($unknown) {
+                $this->stderr('Unknown element type(s): ' . implode(', ', $unknown)
+                    . '. Available: ' . implode(', ', $this->allPackageKeys()) . "\n", Console::FG_RED);
+                return ExitCode::USAGE;
+            }
+        }
+
+        if ($this->site !== null && Craft::$app->getSites()->getSiteByHandle($this->site) === null) {
+            $this->stderr("No site with the handle \"{$this->site}\".\n", Console::FG_RED);
+            return ExitCode::USAGE;
+        }
+
+        // The same rules the control panel's export form is held to.
+        if (!$config->validate()) {
+            foreach ($config->getFirstErrors() as $attribute => $error) {
+                $this->stderr("--$attribute: $error\n", Console::FG_RED);
+            }
+            return ExitCode::USAGE;
+        }
 
         $this->stdout('Exporting: ' . implode(', ', $config->packageKeys) . "\n");
 
@@ -79,7 +131,10 @@ class ExportController extends Controller
         }
 
         if ($this->output) {
-            copy($path, $this->output);
+            if (!@copy($path, $this->output)) {
+                $this->stderr("Couldn't write the package to {$this->output} (it's still at $path).\n", Console::FG_RED);
+                return ExitCode::CANTCREAT;
+            }
             $path = $this->output;
         }
 
@@ -87,6 +142,14 @@ class ExportController extends Controller
         $this->stdout("Wrote package: $path\n", Console::FG_GREEN);
 
         return $report->isSuccessful() ? ExitCode::OK : ExitCode::UNSPECIFIED_ERROR;
+    }
+
+    /**
+     * @return string[]
+     */
+    private function splitList(string $value): array
+    {
+        return array_values(array_filter(array_map('trim', explode(',', $value)), static fn(string $v) => $v !== ''));
     }
 
     /**

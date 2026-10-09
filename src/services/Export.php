@@ -4,6 +4,8 @@ namespace justinholtweb\transport\services;
 
 use Craft;
 use craft\base\ElementInterface;
+use craft\db\Query;
+use craft\db\Table;
 use craft\elements\db\EntryQuery;
 use justinholtweb\transport\events\AfterExportEvent;
 use justinholtweb\transport\events\BeforeExportEvent;
@@ -38,6 +40,12 @@ class Export extends Component
     public const STAGE_SERIALIZE = 'Serializing elements';
     public const STAGE_FILES = 'Bundling asset files';
     public const STAGE_WRITE = 'Writing package';
+
+    /**
+     * The most elements a dependency sweep adds to one export. A runaway relation graph
+     * shouldn't turn "this entry and what it needs" into the whole site without saying so.
+     */
+    public const MAX_DEPENDENCIES = 10000;
 
     /**
      * Runs an export and returns the absolute path to the written package (empty string
@@ -83,6 +91,12 @@ class Export extends Component
                 $progress->note(sprintf('%d element(s) left out: you can’t view them.', count($elements) - count($visible)));
             }
             $elements = $visible;
+        }
+
+        if ($config->includeDependencies) {
+            $dependencies = $this->dependenciesOf($elements, $this->siteIdFor($config), $actor);
+            $elements = array_merge($elements, $dependencies);
+            $progress->note(sprintf('%d dependency element(s) added.', count($dependencies)));
         }
 
         $progress->finish(sprintf('Gathered %d element(s).', count($elements)));
@@ -161,11 +175,7 @@ class Export extends Component
     private function gatherElements(ExportConfig $config): array
     {
         $registry = Plugin::getInstance()->elementRegistry;
-
-        $siteId = $config->site
-            ? Craft::$app->getSites()->getSiteByHandle($config->site)?->id
-            : Craft::$app->getSites()->getPrimarySite()->id;
-
+        $siteId = $this->siteIdFor($config);
         $elements = [];
 
         foreach ($config->packageKeys as $key) {
@@ -176,18 +186,93 @@ class Export extends Component
 
             $query = $handler->query()->siteId($siteId);
 
-            if ($key === 'entries') {
-                if (!empty($config->elementIds)) {
-                    $query->id($config->elementIds);
-                } elseif ($config->section && $query instanceof EntryQuery) {
-                    $query->section($config->section);
-                }
+            if (!empty($config->elementIds)) {
+                $query->id($config->elementIds);
+            } elseif ($key === 'entries' && $config->section && $query instanceof EntryQuery) {
+                $query->section($config->section);
             }
 
             $elements = array_merge($elements, $query->all());
         }
 
         return $elements;
+    }
+
+    private function siteIdFor(ExportConfig $config): ?int
+    {
+        return $config->site
+            ? Craft::$app->getSites()->getSiteByHandle($config->site)?->id
+            : Craft::$app->getSites()->getPrimarySite()->id;
+    }
+
+    /**
+     * Every element the set references — and everything those reference, until nothing
+     * new turns up — limited to types Transport can export and to what `$actor` may view.
+     *
+     * @param ElementInterface[] $elements
+     * @return ElementInterface[] The elements to add, not already in `$elements`.
+     */
+    private function dependenciesOf(array $elements, ?int $siteId, ?\craft\elements\User $actor): array
+    {
+        $plugin = Plugin::getInstance();
+        $registry = $plugin->elementRegistry;
+
+        $seen = [];
+        foreach ($elements as $element) {
+            $seen[$element->uid] = true;
+        }
+
+        $added = [];
+        $frontier = $elements;
+
+        while ($frontier && count($added) < self::MAX_DEPENDENCIES) {
+            $wanted = [];
+            foreach ($frontier as $element) {
+                foreach ($plugin->serializer->collectReferences($element) as $uid) {
+                    if (!isset($seen[$uid])) {
+                        $wanted[$uid] = true;
+                        $seen[$uid] = true;
+                    }
+                }
+            }
+
+            if (!$wanted) {
+                break;
+            }
+
+            // References are bare UIDs; the elements table says what each one is.
+            $types = (new Query())
+                ->select(['type', 'uid'])
+                ->from(Table::ELEMENTS)
+                ->where(['uid' => array_keys($wanted), 'dateDeleted' => null])
+                ->all();
+
+            $uidsByType = [];
+            foreach ($types as $row) {
+                $uidsByType[$row['type']][] = $row['uid'];
+            }
+
+            $frontier = [];
+            foreach ($uidsByType as $type => $uids) {
+                $handler = $registry->getHandlerForType($type);
+                if ($handler === null) {
+                    continue;
+                }
+
+                foreach ($handler->query()->siteId($siteId)->uid($uids)->all() as $dependency) {
+                    if (!Access::canView($dependency, $actor)) {
+                        continue;
+                    }
+                    if (count($added) >= self::MAX_DEPENDENCIES) {
+                        break 2;
+                    }
+                    $added[] = $dependency;
+                    $frontier[] = $dependency;
+                }
+            }
+        }
+
+        return $added;
     }
 
     private function keyForElement(ElementInterface $element): string

@@ -74,6 +74,49 @@ class Snapshotter extends Component
     }
 
     /**
+     * What rolling `$history` back would do, without doing it: the elements it would restore
+     * to their pre-import state, the ones it would delete because the import created them,
+     * the ones already gone, and any the current user isn't allowed to touch (which would
+     * refuse the whole rollback). Backs `transport/rollback --dry-run`.
+     *
+     * @return array{restore:string[],delete:string[],missing:string[],refused:string[],errors:string[]}
+     */
+    public function plan(ImportHistory $history): array
+    {
+        $plan = ['restore' => [], 'delete' => [], 'missing' => [], 'refused' => [], 'errors' => []];
+
+        $snapshot = $history->snapshotId ? ElementSnapshot::findOne(['id' => $history->snapshotId]) : null;
+        if (!$snapshot) {
+            $plan['errors'][] = 'No snapshot to roll back to.';
+            return $plan;
+        }
+
+        $entries = $this->decompress($snapshot->elementData);
+        $plan['refused'] = $this->refusedForRollback($entries, Access::actor(Craft::$app->getUser()->getId()));
+
+        foreach ($entries as $entry) {
+            IdentityHelper::flush();
+            $element = !empty($entry['uid']) && !empty($entry['type'])
+                ? IdentityHelper::resolveElement($entry['uid'], $entry['type'])
+                : null;
+            $label = $element !== null
+                ? sprintf('%s (%s)', $element->getUiLabel(), $entry['uid'])
+                : (string)($entry['uid'] ?? '');
+
+            if (!empty($entry['existed'])) {
+                // Restoring re-saves the prior state, recreating the element if it has gone since.
+                $plan['restore'][] = $label;
+            } elseif ($element !== null) {
+                $plan['delete'][] = $label;
+            } else {
+                $plan['missing'][] = $label;
+            }
+        }
+
+        return $plan;
+    }
+
+    /**
      * Rolls an import back: restores updated elements to their prior state and deletes
      * elements the import created. The rollback is itself snapshot-protected, so it can
      * be undone.

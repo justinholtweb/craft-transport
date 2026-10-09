@@ -15,9 +15,18 @@ class ExportConfig extends Model
     public array $packageKeys = ['entries'];
 
     /**
-     * @var int[] Explicit entry IDs to export. Takes precedence over section scoping.
+     * @var int[] Explicit element IDs to export. They narrow every selected element type
+     *            (before 5.2 they applied to entries only) and take precedence over
+     *            section scoping.
      */
     public array $elementIds = [];
+
+    /**
+     * @var bool Whether to pull in the elements the export references — related entries,
+     *           categories, assets, authors, structure parents — and theirs in turn, so
+     *           the package imports cleanly into an environment that has none of them.
+     */
+    public bool $includeDependencies = false;
 
     /**
      * @var string|null Section handle to export entries from (when not selecting by id).
@@ -56,7 +65,7 @@ class ExportConfig extends Model
             // the temp directory, somewhere it could be downloaded.
             [['packageName'], 'match', 'pattern' => '/^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/', 'message' => 'Use letters, numbers, dots, dashes and underscores only.'],
             [['userId'], 'integer'],
-            [['includeAssetFiles'], 'boolean'],
+            [['includeAssetFiles', 'includeDependencies'], 'boolean'],
         ];
     }
 }
