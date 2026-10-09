@@ -1,7 +1,6 @@
 # Release Notes for Transport
 
-## Unreleased
-
+## 5.2.0 — 2026-10-09
 ### Added
 - Every control panel action now has a console command. `transport/import/diff` shows what an
   import would change, field by field — the wizard's Configure and Preview steps — and exits
